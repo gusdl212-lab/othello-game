@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.6)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.7)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -72,8 +72,8 @@
 <div class="container">
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
-        <span>🌐 파이어베이스 실시간 영구 연동 (관전 모드 및 빈 방 자동 삭제)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.6</span>
+        <span>🌐 파이어베이스 실시간 영구 연동 (관리자 점수 및 관전 모드 완벽 고정)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.7</span>
     </div>
 
     <!-- 로그인 화면 -->
@@ -170,7 +170,7 @@
         let sessionUser = localStorage.getItem('othello_session_user');
         if (sessionUser) {
             await fetchSystemData();
-            currentUser = globalData.users[sessionUser] || { id: sessionUser, score: 0 };
+            currentUser = globalData.users[sessionUser] || { id: sessionUser, score: (sessionUser === ADMIN_ID ? 999 : 0) };
             document.getElementById('my-profile-name').innerText = currentUser.id;
             switchView('view-lobby');
             startMainSync();
@@ -192,6 +192,11 @@
                 }
             }
         } catch (e) { console.error(e); }
+
+        // 관리자 점수 강제 고정 보장
+        if (globalData.users[ADMIN_ID]) {
+            globalData.users[ADMIN_ID].score = 999;
+        }
         
         if (currentRoomId && (!globalData.rooms || !globalData.rooms[currentRoomId])) {
             currentRoomId = null;
@@ -213,10 +218,15 @@
         let id = document.getElementById('login-id').value.trim();
         if (!id) return alert("아이디를 입력하세요.");
         await fetchSystemData();
+        
         if (!globalData.users[id]) {
-            globalData.users[id] = { id: id, score: 0 };
+            globalData.users[id] = { id: id, score: (id === ADMIN_ID ? 999 : 0) };
             await saveSpecificData('users/' + id, globalData.users[id]);
+        } else if (id === ADMIN_ID && globalData.users[ADMIN_ID].score !== 999) {
+            globalData.users[ADMIN_ID].score = 999;
+            await saveSpecificData('users/' + ADMIN_ID, globalData.users[ADMIN_ID]);
         }
+
         currentUser = globalData.users[id];
         localStorage.setItem('othello_session_user', id);
         document.getElementById('my-profile-name').innerText = id;
