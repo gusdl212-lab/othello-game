@@ -72,7 +72,7 @@
 <div class="container">
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
-        <span>🌐 관전자 모드 및 빈 방 자동 삭제 탑재</span>
+        <span>🌐 파이어베이스 실시간 영구 연동 (관전 모드 및 빈 방 자동 삭제)</span>
         <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.6</span>
     </div>
 
@@ -274,12 +274,10 @@
         await fetchSystemData();
         let room = globalData.rooms[roomName];
         if (room) {
-            // 대기중인 방이고 참여자가 아니면 플레이어로 참가
             if (room.status === 'waiting' && !room.players[currentUser.id]) {
                 room.players[currentUser.id] = { id: currentUser.id, team: 'red' };
                 await saveSpecificData('rooms/' + roomName, room);
             }
-            // 이미 게임이 시작되었거나 자리가 없으면 관전자로 입장 (players에 등록 안 함)
         }
         renderRoomOrGameView();
     }
@@ -294,11 +292,9 @@
         let room = globalData.rooms[rId];
         if (room && room.players) {
             delete room.players[currentUser.id];
-            // 방에 남은 사람이 아무도 없으면 방 완전 삭제
             if (Object.keys(room.players).length === 0) {
                 await fetch(`${FIREBASE_BASE_URL}/rooms/${rId}.json`, { method: 'DELETE' });
             } else {
-                // 방장이 나갔을 경우 남은 플레이어 중 첫 번째 사람을 새 방장으로 위임
                 if (room.hostId === currentUser.id) {
                     let remainingPlayers = Object.keys(room.players);
                     if (remainingPlayers.length > 0) {
@@ -355,7 +351,6 @@
             if (room.hostId === currentUser.id) hostControls.classList.remove('hidden');
             else hostControls.classList.add('hidden');
         } else {
-            // 게임 중이거나 관전자인 경우
             switchView('view-game');
             let statusTitle = document.getElementById('game-status-title');
             if (isPlayer) {
