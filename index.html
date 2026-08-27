@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.5)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.6)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -72,8 +72,8 @@
 <div class="container">
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
-        <span>🌐 파이어베이스 실시간 영구 연동 모드 (랭킹 복구완료)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.5</span>
+        <span>🌐 관전자 모드 및 빈 방 자동 삭제 탑재</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.6</span>
     </div>
 
     <!-- 로그인 화면 -->
@@ -142,10 +142,10 @@
         </div>
     </div>
 
-    <!-- 게임 플레이 화면 -->
+    <!-- 게임 플레이 화면 (관전 모드 지원) -->
     <div id="view-game" class="card hidden">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <div style="font-size: 14px; font-weight: bold; color: #66fcf1;">🎮 오셀로 대국 중</div>
+            <div style="font-size: 14px; font-weight: bold; color: #66fcf1;" id="game-status-title">🎮 오셀로 대국 중</div>
             <button class="btn-danger" style="width:auto;" onclick="leaveRoom()">나가기 🚪</button>
         </div>
         <div class="game-layout">
@@ -198,6 +198,7 @@
             switchView('view-lobby');
         }
         if (currentUser) renderLobbyView();
+        if (currentRoomId) renderRoomOrGameView();
     }
 
     async function saveSpecificData(path, data) {
@@ -272,27 +273,41 @@
         currentRoomId = roomName;
         await fetchSystemData();
         let room = globalData.rooms[roomName];
-        if (room && room.status === 'waiting' && !room.players[currentUser.id]) {
-            room.players[currentUser.id] = { id: currentUser.id, team: 'red' };
-            await saveSpecificData('rooms/' + roomName, room);
+        if (room) {
+            // 대기중인 방이고 참여자가 아니면 플레이어로 참가
+            if (room.status === 'waiting' && !room.players[currentUser.id]) {
+                room.players[currentUser.id] = { id: currentUser.id, team: 'red' };
+                await saveSpecificData('rooms/' + roomName, room);
+            }
+            // 이미 게임이 시작되었거나 자리가 없으면 관전자로 입장 (players에 등록 안 함)
         }
         renderRoomOrGameView();
     }
 
     async function leaveRoom() {
         if (!currentRoomId) return;
-        await fetchSystemData();
-        let room = globalData.rooms[currentRoomId];
-        if (room && room.players) {
-            delete room.players[currentUser.id];
-            if (Object.keys(room.players).length === 0) {
-                await fetch(`${FIREBASE_BASE_URL}/rooms/${currentRoomId}.json`, { method: 'DELETE' });
-            } else {
-                await saveSpecificData('rooms/' + currentRoomId, room);
-            }
-        }
+        let rId = currentRoomId;
         currentRoomId = null;
         switchView('view-lobby');
+
+        await fetchSystemData();
+        let room = globalData.rooms[rId];
+        if (room && room.players) {
+            delete room.players[currentUser.id];
+            // 방에 남은 사람이 아무도 없으면 방 완전 삭제
+            if (Object.keys(room.players).length === 0) {
+                await fetch(`${FIREBASE_BASE_URL}/rooms/${rId}.json`, { method: 'DELETE' });
+            } else {
+                // 방장이 나갔을 경우 남은 플레이어 중 첫 번째 사람을 새 방장으로 위임
+                if (room.hostId === currentUser.id) {
+                    let remainingPlayers = Object.keys(room.players);
+                    if (remainingPlayers.length > 0) {
+                        room.hostId = remainingPlayers[0];
+                    }
+                }
+                await saveSpecificData('rooms/' + rId, room);
+            }
+        }
         fetchSystemData();
     }
 
@@ -319,6 +334,8 @@
         let room = globalData.rooms[currentRoomId];
         if (!room) return switchView('view-lobby');
 
+        let isPlayer = room.players && room.players[currentUser.id];
+
         if (room.status === 'waiting') {
             switchView('view-room');
             document.getElementById('display-room-id').innerText = room.id;
@@ -338,7 +355,15 @@
             if (room.hostId === currentUser.id) hostControls.classList.remove('hidden');
             else hostControls.classList.add('hidden');
         } else {
+            // 게임 중이거나 관전자인 경우
             switchView('view-game');
+            let statusTitle = document.getElementById('game-status-title');
+            if (isPlayer) {
+                statusTitle.innerText = `🎮 오셀로 대국 중 (${room.players[currentUser.id].team === 'blue' ? '🔵 파란팀' : '🔴 빨간팀'})`;
+            } else {
+                statusTitle.innerText = `👁️ 오셀로 관전 모드 (구경 중)`;
+            }
+
             let boardEl = document.getElementById('othello-board');
             boardEl.innerHTML = '';
             for (let r = 0; r < 8; r++) {
@@ -358,7 +383,6 @@
     }
 
     function renderLobbyView() {
-        // 랭킹 렌더링 (단수 표시 복구)
         let rankingEl = document.getElementById('ranking-list');
         let usersArr = Object.values(globalData.users || {});
         usersArr.sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -373,7 +397,6 @@
             rankingEl.appendChild(div);
         });
 
-        // 방 목록 렌더링
         let roomListBox = document.getElementById('room-list-box');
         roomListBox.innerHTML = '';
         let rooms = globalData.rooms || {};
