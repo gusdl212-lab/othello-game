@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.5 - 방생성 및 관리자표시 수정)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.6 - 랭킹 관리자 이름 수정)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -110,7 +110,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.5 (방생성 및 관리자이름 수정)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.6 (랭킹 관리자 표시 수정)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -166,7 +166,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.5 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.6 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -323,7 +323,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.5.html';
+        a.download = 'othello_v2.6.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -615,7 +615,7 @@
         userArray.forEach((u, index) => {
             const rankNum = index + 1;
             const isAdmin = u.id === ADMIN_ID;
-            const nameDisplay = isAdmin ? '👑 관리자' : u.id;
+            const nameDisplay = isAdmin ? '관리자' : u.id;
             const scoreDisplay = isAdmin ? '마스터' : `${u.score || 0}승`;
             const adminClass = isAdmin ? 'rank-admin' : '';
 
