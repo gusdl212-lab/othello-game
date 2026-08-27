@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.4 - 관전자모드 및 빈방청소)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.5 - 방생성 및 관리자표시 수정)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -110,7 +110,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.4 (관전자모드 및 빈방청소)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.5 (방생성 및 관리자이름 수정)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -166,7 +166,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.4 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.5 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -323,7 +323,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.4.html';
+        a.download = 'othello_v2.5.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -335,6 +335,11 @@
             document.getElementById(id).classList.add('hidden');
         });
         document.getElementById(viewId).classList.remove('hidden');
+    }
+
+    function getDisplayName(userId) {
+        if (userId === ADMIN_ID) return "관리자";
+        return userId;
     }
 
     function getGradeText(score, isAdmin) {
@@ -370,7 +375,7 @@
                 if (currentUser.id === ADMIN_ID) currentUser.score = 999;
                 else if (currentUser.score === undefined) currentUser.score = 0;
 
-                document.getElementById('my-profile-name').innerText = (currentUser.id === ADMIN_ID) ? "관리자" : currentUser.id;
+                document.getElementById('my-profile-name').innerText = getDisplayName(currentUser.id);
                 document.getElementById('my-profile-grade').innerText = getGradeText(currentUser.score, currentUser.id === ADMIN_ID);
 
                 if (sessionRoomId && globalData.rooms && globalData.rooms[sessionRoomId]) {
@@ -441,7 +446,7 @@
             if (currentUser.id === ADMIN_ID) currentUser.score = 999;
             else currentUser.score = globalData.users[currentUser.id].score || 0;
             
-            document.getElementById('my-profile-name').innerText = (currentUser.id === ADMIN_ID) ? "관리자" : currentUser.id;
+            document.getElementById('my-profile-name').innerText = getDisplayName(currentUser.id);
             document.getElementById('my-profile-grade').innerText = getGradeText(currentUser.score, currentUser.id === ADMIN_ID);
         }
 
@@ -587,7 +592,6 @@
         switchView('view-auth');
     }
 
-    /* --- 로비 렌더링 & 랭킹 정렬 (핵심 수정) --- */
     function renderLobbyView() {
         renderRanking();
         renderRoomList();
@@ -601,7 +605,6 @@
 
         let userArray = Object.values(globalData.users);
         
-        // 내림차순 정렬 (승수 높을수록 상위, 관리자는 항상 1위)
         userArray.sort((a, b) => {
             if (a.id === ADMIN_ID) return -1;
             if (b.id === ADMIN_ID) return 1;
@@ -612,7 +615,7 @@
         userArray.forEach((u, index) => {
             const rankNum = index + 1;
             const isAdmin = u.id === ADMIN_ID;
-            const nameDisplay = isAdmin ? `👑 ${u.id}` : u.id;
+            const nameDisplay = isAdmin ? '👑 관리자' : u.id;
             const scoreDisplay = isAdmin ? '마스터' : `${u.score || 0}승`;
             const adminClass = isAdmin ? 'rank-admin' : '';
 
@@ -666,9 +669,10 @@
         let html = '';
         activeUsers.forEach(u => {
             const isMe = currentUser && u.id === currentUser.id;
+            const displayName = getDisplayName(u.id);
             html += `
                 <li class="user-item" onclick="setWhisperTarget('${u.id}')" style="cursor:pointer;">
-                    <span>${u.id === ADMIN_ID ? '👑 관리자' : u.id} ${isMe ? '(나)' : ''}</span>
+                    <span>${u.id === ADMIN_ID ? '👑 ' : ''}${displayName} ${isMe ? '(나)' : ''}</span>
                     <span style="font-size:10px; color:#66fcf1;">온라인</span>
                 </li>
             `;
@@ -683,7 +687,7 @@
             document.getElementById('chat-target-indicator').innerText = '';
         } else {
             whisperTarget = targetId;
-            document.getElementById('chat-target-indicator').innerText = `(귓속말 ➔ ${targetId})`;
+            document.getElementById('chat-target-indicator').innerText = `(귓속말 ➔ ${getDisplayName(targetId)})`;
         }
     }
 
@@ -691,12 +695,13 @@
         const chatBox = document.getElementById('lobby-chat-msgs');
         let html = '';
         (globalData.lobbyChat || []).forEach(msg => {
+            const senderName = getDisplayName(msg.sender);
             if (msg.target) {
                 if (currentUser && (msg.sender === currentUser.id || msg.target === currentUser.id)) {
-                    html += `<div class="chat-msg whisper">[귓] <span class="sender">${msg.sender}</span>: ${msg.text}</div>`;
+                    html += `<div class="chat-msg whisper">[귓] <span class="sender">${senderName}</span>: ${msg.text}</div>`;
                 }
             } else {
-                html += `<div class="chat-msg"><span class="sender">${msg.sender}</span>: ${msg.text}</div>`;
+                html += `<div class="chat-msg"><span class="sender">${senderName}</span>: ${msg.text}</div>`;
             }
         });
         chatBox.innerHTML = html;
@@ -719,7 +724,6 @@
         input.value = '';
     }
 
-    /* --- 방 관련 로직 및 관전자 모드 --- */
     async function createRoom() {
         const roomId = prompt("생성할 방 이름을 입력하세요:");
         if (!roomId) return;
@@ -741,9 +745,13 @@
             chat: []
         };
 
+        const success = await saveSpecificData('rooms/' + roomId, newRoom);
+        if (!success) {
+            return alert("방 생성에 실패했습니다. 다시 시도해주세요.");
+        }
+
         currentRoomId = roomId;
         localStorage.setItem('othello_session_room', roomId);
-        await saveSpecificData('rooms/' + roomId, newRoom);
         switchView('view-room');
     }
 
@@ -825,7 +833,6 @@
         return board;
     }
 
-    /* --- 방 및 게임 뷰 렌더링 --- */
     function renderRoomOrGameView() {
         const room = globalData.rooms[currentRoomId];
         if (!room) return;
@@ -858,7 +865,8 @@
 
         let blueHtml = '', redHtml = '', specHtml = '';
         Object.values(room.players || {}).forEach(p => {
-            const item = `<li class="user-item"><span>${p.isAi ? '🤖 ' : ''}${p.id}</span></li>`;
+            const displayName = p.isAi ? p.id : getDisplayName(p.id);
+            const item = `<li class="user-item"><span>${p.isAi ? '🤖 ' : ''}${displayName}</span></li>`;
             if (p.team === 'blue') blueHtml += item;
             else if (p.team === 'red') redHtml += item;
             else specHtml += item;
@@ -888,7 +896,6 @@
         await saveSpecificData('rooms/' + currentRoomId, room);
     }
 
-    /* --- 게임 플레이 및 판 조작 --- */
     function renderGameView(room) {
         const boardSize = room.boardSize || 8;
         const boardEl = document.getElementById('othello-board');
@@ -897,7 +904,6 @@
         const isSpectator = room.players[currentUser.id]?.team === 'spectator';
         const myTeam = room.players[currentUser.id]?.team;
 
-        // 턴 및 점수 계산
         let blueScore = 0, redScore = 0;
         for (let r = 0; r < boardSize; r++) {
             for (let c = 0; c < boardSize; c++) {
@@ -922,15 +928,13 @@
             turnBadge.innerText = `현재 턴: ${turnColor} ${isSpectator ? '(👁️ 관전 중)' : ''}`;
         }
 
-        // 일시정지 오버레이
         if (room.status === 'paused') {
             document.getElementById('pause-overlay').classList.remove('hidden');
-            document.getElementById('pause-by-text').innerText = `${room.pausedBy} 님이 게임을 일시정지했습니다.`;
+            document.getElementById('pause-by-text').innerText = `${getDisplayName(room.pausedBy)} 님이 게임을 일시정지했습니다.`;
         } else {
             document.getElementById('pause-overlay').classList.add('hidden');
         }
 
-        // 바둑판 그리드 렌더링
         let validMoves = (!isSpectator && room.turn === myTeam && room.status === 'playing') ? getValidMoves(room.board, boardSize, myTeam) : [];
 
         let html = '';
@@ -965,11 +969,9 @@
         const flips = getFlips(room.board, boardSize, r, c, myTeam);
         if (flips.length === 0) return;
 
-        // 돌 놓기 및 뒤집기
         room.board[r][c] = myTeam;
         flips.forEach(f => { room.board[f.r][f.c] = myTeam; });
 
-        // 턴 넘기기
         const nextTeam = myTeam === 'blue' ? 'red' : 'blue';
         const nextMoves = getValidMoves(room.board, boardSize, nextTeam);
 
@@ -978,7 +980,6 @@
         } else {
             const currentTeamMoves = getValidMoves(room.board, boardSize, myTeam);
             if (currentTeamMoves.length === 0) {
-                // 더 이상 양팀 모두 둘 곳이 없음 -> 게임 종료
                 room.status = 'ended';
                 const { blue, red } = countDiscs(room.board, boardSize);
                 if (blue > red) room.winner = 'blue';
@@ -1049,7 +1050,6 @@
         return totalFlips;
     }
 
-    /* --- AI 턴 자동 수행 --- */
     async function checkAndTriggerAiTurn() {
         if (!currentRoomId) return;
         const room = globalData.rooms[currentRoomId];
@@ -1092,7 +1092,8 @@
         const chatBox = document.getElementById('game-chat-msgs');
         let html = '';
         (room.chat || []).forEach(msg => {
-            html += `<div class="chat-msg"><span class="sender">${msg.sender}</span>: ${msg.text}</div>`;
+            const senderName = getDisplayName(msg.sender);
+            html += `<div class="chat-msg"><span class="sender">${senderName}</span>: ${msg.text}</div>`;
         });
         chatBox.innerHTML = html;
         chatBox.scrollTop = chatBox.scrollHeight;
