@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.8 - 관리자 권한 완벽 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.9 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.8 (관리자 권한 패치됨)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.9 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.8 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.9 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -288,7 +288,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.8.html';
+        a.download = 'othello_v2.9.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -307,9 +307,24 @@
         return userId;
     }
 
-    function getGradeText(score, isAdmin) {
-        if (isAdmin) return "마스터(관리자)";
-        return `${score || 0}승`;
+    // 승수/점수 및 전체 유저 비율(퍼센트)에 따른 단 자동 계산 함수
+    function calculateDan(user, sortedUsers) {
+        if (user.id === ADMIN_ID) return "마스터(관리자)";
+        const score = user.score || 0;
+        if (score === 0) return "0승 (무단)";
+
+        const totalUsers = sortedUsers.length;
+        // 관리자 제외 일반 유저들 중에서의 순위 계산
+        const normalUsers = sortedUsers.filter(u => u.id !== ADMIN_ID);
+        const rankIndex = normalUsers.findIndex(u => u.id === user.id);
+        const percentile = totalUsers > 1 ? (rankIndex / totalUsers) * 100 : 0;
+
+        // 예시 백분율/점수 기준 단 시스템 (상위 % 또는 승수에 따라 자동 부여)
+        if (percentile <= 5 || score >= 20) return "5단 (고수)";
+        if (percentile <= 15 || score >= 15) return "4단";
+        if (percentile <= 30 || score >= 10) return "3단";
+        if (percentile <= 55 || score >= 5) return "2단";
+        return `1단 (${score}승)`;
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
@@ -340,8 +355,11 @@
                 if (currentUser.id === ADMIN_ID) currentUser.score = 999;
                 else if (currentUser.score === undefined) currentUser.score = 0;
 
+                let userArray = Object.values(globalData.users);
+                userArray.sort((a, b) => (b.score || 0) - (a.score || 0));
+
                 document.getElementById('my-profile-name').innerText = getDisplayName(currentUser.id);
-                document.getElementById('my-profile-grade').innerText = getGradeText(currentUser.score, currentUser.id === ADMIN_ID);
+                document.getElementById('my-profile-grade').innerText = calculateDan(currentUser, userArray);
 
                 if (sessionRoomId && globalData.rooms && globalData.rooms[sessionRoomId]) {
                     const room = globalData.rooms[sessionRoomId];
@@ -413,12 +431,15 @@
 
         if (!currentUser) return;
 
+        let userArray = Object.values(globalData.users);
+        userArray.sort((a, b) => (b.score || 0) - (a.score || 0));
+
         if (globalData.users[currentUser.id]) {
             if (currentUser.id === ADMIN_ID) currentUser.score = 999;
             else currentUser.score = globalData.users[currentUser.id].score || 0;
             
             document.getElementById('my-profile-name').innerText = getDisplayName(currentUser.id);
-            document.getElementById('my-profile-grade').innerText = getGradeText(currentUser.score, currentUser.id === ADMIN_ID);
+            document.getElementById('my-profile-grade').innerText = calculateDan(currentUser, userArray);
         }
 
         if (currentRoomId) {
@@ -601,7 +622,7 @@
             const rankNum = index + 1;
             const isUserAdmin = u.id === ADMIN_ID;
             const nameDisplay = isUserAdmin ? '관리자' : u.id;
-            const scoreDisplay = isUserAdmin ? '마스터' : `${u.score || 0}승`;
+            const danDisplay = calculateDan(u, userArray);
             const adminClass = isUserAdmin ? 'rank-admin' : '';
 
             let deleteBtn = '';
@@ -613,7 +634,7 @@
                 <div class="rank-item ${adminClass}">
                     <span><strong>${rankNum}.</strong> ${nameDisplay}</span>
                     <div style="display:flex; align-items:center; gap:6px;">
-                        <span>${scoreDisplay}</span>
+                        <span style="font-size:11px; color:#66fcf1;">${danDisplay}</span>
                         ${deleteBtn}
                     </div>
                 </div>
