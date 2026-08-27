@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.6 - 랭킹 관리자 이름 수정)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.7 - 방 폭파 복구 및 오셀로 단독 분리)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -109,8 +109,8 @@
 <div class="container">
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
-        <span>🌐 파이어베이스 실시간 영구 연동 모드</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.6 (랭킹 관리자 표시 수정)</span>
+        <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.7 (방 폭파 복구)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -166,7 +166,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.6 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.7 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -206,7 +206,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display:flex; align-items:center; gap:10px;">
                 <h3>🏠 방 이름: <span id="display-room-id" style="color:#66fcf1;"></span></h3>
-                <button id="btn-explode-room" class="btn-explode admin-only hidden" style="width:auto; padding:4px 10px; font-size:12px;" onclick="explodeRoom()">💣 방 폭파</button>
+                <button id="btn-explode-room" class="btn-explode hidden" style="width:auto; padding:4px 10px; font-size:12px;" onclick="explodeRoom()">💣 방 폭파</button>
             </div>
             <button class="btn-danger" style="width:auto;" onclick="leaveRoom()">방 나가기 🚪</button>
         </div>
@@ -266,7 +266,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="display:flex; align-items:center; gap:10px;">
                 <div style="font-size: 14px; font-weight: bold; color: #66fcf1;">🎮 오셀로 대국 중 <span style="font-size:11px; color:#aaa; font-weight:normal;">(💡 ESC 키로 일시정지 가능)</span></div>
-                <button id="btn-explode-game" class="btn-explode admin-only hidden" style="width:auto; padding:3px 8px; font-size:11px;" onclick="explodeRoom()">💣 방 폭파</button>
+                <button id="btn-explode-game" class="btn-explode hidden" style="width:auto; padding:3px 8px; font-size:11px;" onclick="explodeRoom()">💣 방 폭파</button>
             </div>
             <button class="btn-danger" style="width:auto;" onclick="leaveRoom()">게임 나가기 🚪</button>
         </div>
@@ -323,7 +323,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.6.html';
+        a.download = 'othello_v2.7.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -854,8 +854,11 @@
         if (isHost) document.getElementById('room-host-controls').classList.remove('hidden');
         else document.getElementById('room-host-controls').classList.add('hidden');
 
+        // 관리자인 경우 방 폭파 버튼 표시
         if (isAdmin) {
             document.getElementById('btn-explode-room').classList.remove('hidden');
+        } else {
+            document.getElementById('btn-explode-room').classList.add('hidden');
         }
 
         document.querySelectorAll('.host-only').forEach(el => {
@@ -900,6 +903,13 @@
         const boardSize = room.boardSize || 8;
         const boardEl = document.getElementById('othello-board');
         boardEl.className = `othello-board size-${boardSize}`;
+
+        const isAdmin = currentUser.id === ADMIN_ID;
+        if (isAdmin) {
+            document.getElementById('btn-explode-game').classList.remove('hidden');
+        } else {
+            document.getElementById('btn-explode-game').classList.add('hidden');
+        }
 
         const isSpectator = room.players[currentUser.id]?.team === 'spectator';
         const myTeam = room.players[currentUser.id]?.team;
