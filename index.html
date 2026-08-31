@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.16 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.17 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.16 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.17 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.16 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.17 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -287,6 +287,7 @@
     let roomWriteInProgress = false;
     // 착수 전에 시작된 Firebase GET 응답이 착수 후 상태를 덮어쓰지 않도록 하는 세대 번호
     let roomSyncGeneration = 0;
+    let roomStateSyncInterval = null;
 
     function downloadLatestCode() {
         const htmlContent = document.documentElement.outerHTML;
@@ -294,7 +295,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.16.html';
+        a.download = 'othello_v2.17.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -313,7 +314,7 @@
         return userId;
     }
 
-    // [v2.16] 게임판 상태의 단조 증가 버전.
+    // [v2.17] 게임판 상태의 단조 증가 버전.
     // Firebase의 오래된 GET 응답이 현재 게임 상태를 덮어쓰지 못하게 한다.
     function getStateVersion(room) {
         const v = Number(room?.stateVersion);
@@ -428,7 +429,34 @@
 
     function startMainSync() {
         if (syncInterval) clearInterval(syncInterval);
+        if (roomStateSyncInterval) clearInterval(roomStateSyncInterval);
+
+        // 로비/회원 데이터는 기존처럼 주기적으로 동기화한다.
         syncInterval = setInterval(fetchSystemData, 1500);
+
+        // 게임 중인 방은 전체 Firebase 데이터를 다시 받아오지 않고
+        // 해당 방 하나만 별도로 동기화한다.
+        roomStateSyncInterval = setInterval(syncCurrentRoom, 500);
+    }
+
+    async function syncCurrentRoom() {
+        const roomId = currentRoomId;
+        if (!roomId || !currentUser || roomWriteInProgress || timeoutProcessing) return;
+
+        const generationAtStart = roomSyncGeneration;
+
+        try {
+            const room = await fetchFreshRoom(roomId);
+            if (!room || currentRoomId !== roomId) return;
+
+            // 착수/타임아웃이 요청 중간에 발생했다면 이 응답은 폐기한다.
+            if (generationAtStart !== roomSyncGeneration) return;
+
+            // 현재 방의 실제 Firebase 상태만 화면에 반영한다.
+            // 전체 데이터 GET 결과로 게임판을 덮어쓰지 않는다.
+            globalData.rooms[roomId] = room;
+            renderRoomOrGameView();
+        } catch (e) {}
     }
 
     async function fetchSystemData() {
@@ -445,16 +473,13 @@
                 if (data) {
                     globalData.users = data.users || {};
                     const incomingRooms = data.rooms || {};
-                    const localRoom = requestRoomId ? globalData.rooms[requestRoomId] : null;
 
-                    // 이 요청이 시작된 뒤 착수가 발생했다면, 이 응답은 착수 전 스냅샷일 수 있다.
-                    // 현재 방만 로컬 최신 상태로 보존하고, 다음 동기화에서 Firebase 확정값을 받는다.
-                    if (
-                        requestRoomId &&
-                        requestGeneration !== roomSyncGeneration &&
-                        localRoom
-                    ) {
-                        incomingRooms[requestRoomId] = localRoom;
+                    // [v2.17 핵심]
+                    // 게임 중인 방은 전체 DB polling의 대상에서 제외한다.
+                    // 전체 /rooms GET은 다른 방/로비 데이터만 갱신하고,
+                    // 현재 게임방은 syncCurrentRoom()이 방 단위로 담당한다.
+                    if (requestRoomId && globalData.rooms[requestRoomId]) {
+                        incomingRooms[requestRoomId] = globalData.rooms[requestRoomId];
                     }
 
                     globalData.rooms = incomingRooms;
@@ -478,7 +503,12 @@
             return;
         }
 
-        await cleanupEmptyRooms();
+        // 게임 중에는 전체 DB 스냅샷을 이용한 방 정리를 하지 않는다.
+        // 상대방의 heartbeat가 아직 전체 snapshot에 반영되지 않은 순간
+        // 현재 게임방을 삭제하는 경쟁 상태를 막는다.
+        if (!currentRoomId) {
+            await cleanupEmptyRooms();
+        }
         if (!currentUser) return;
 
         const userArray = Object.values(globalData.users);
@@ -546,7 +576,7 @@
         } catch (e) {}
     }
 
-    // [v2.16 핵심] 게임방은 전체 상태 PUT 시 ETag 조건부 저장을 사용한다.
+    // [v2.17 핵심] 게임방은 전체 상태 PUT 시 ETag 조건부 저장을 사용한다.
     // 두 컴퓨터가 동시에 같은 오래된 방 데이터를 저장해서 서로의 착수를
     // 덮어쓰는 것을 Firebase 레벨에서 차단한다.
     async function fetchRoomWithETag(roomId) {
@@ -931,6 +961,11 @@
     }
 
     async function leaveRoom() {
+        roomSyncGeneration++;
+        if (roomStateSyncInterval) {
+            clearInterval(roomStateSyncInterval);
+            roomStateSyncInterval = null;
+        }
         if (!currentRoomId || !currentUser) return;
         const roomId = currentRoomId;
         const room = globalData.rooms[roomId];
@@ -1049,7 +1084,7 @@
             // 착수 중인 전체 방 저장을 덮어쓰는 경쟁 상태를 만들지 않는다.
         }
 
-        // [v2.16] 기존 방에 상태 버전이 없으면 0으로 취급한다.
+        // [v2.17] 기존 방에 상태 버전이 없으면 0으로 취급한다.
         // 여기서는 Firebase에 별도 저장하지 않아 렌더링 자체가 게임 상태를 덮어쓰지 않는다.
         if (!Number.isFinite(Number(room.stateVersion))) {
             room.stateVersion = 0;
@@ -1147,7 +1182,7 @@
         roomWriteInProgress = true;
 
         try {
-            // [v2.16] 타임아웃도 반드시 Firebase 최신 상태 + ETag를 기준으로 처리한다.
+            // [v2.17] 타임아웃도 반드시 Firebase 최신 상태 + ETag를 기준으로 처리한다.
             // 두 컴퓨터에서 동시에 30초가 되어도 한 쪽만 조건부 PUT에 성공한다.
             const fresh = await fetchRoomWithETag(roomId);
             if (!fresh || !fresh.room) return;
@@ -1324,9 +1359,9 @@
 
             globalData.rooms[roomId] = room;
 
-            // 저장 직후 확정 상태를 다시 확인한다.
-            // 이 요청은 착수 이후 세대에서 시작하므로 착수 전 GET보다 우선한다.
-            fetchSystemData();
+            // 저장 성공. 이후에는 방 전용 syncCurrentRoom()이
+            // Firebase의 확정 상태를 계속 받아온다.
+            // 전체 DB fetchSystemData()를 여기서 호출하지 않는다.
 
             if (room.status === 'ended' && room.winner && !room.resultRecorded) {
                 room.resultRecorded = true;
