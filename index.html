@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.10 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.11 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.10 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.11 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.10 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.11 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -290,7 +290,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.10.html';
+        a.download = 'othello_v2.11.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -377,6 +377,7 @@
                 }
                 startMainSync();
                 startHeartbeat();
+                startTurnTimer();
                 document.body.style.visibility = 'visible';
                 return;
             }
@@ -408,7 +409,7 @@
 
             updateTurnTimerDisplay(room);
 
-            if (room.turnStartedAt && Date.now() - Number(room.turnStartedAt) >= 30000) {
+            if (!timeoutProcessing && room.turnStartedAt && Date.now() - Number(room.turnStartedAt) >= 30000) {
                 processTurnTimeout();
             }
         }, 250);
@@ -566,6 +567,7 @@
         switchView('view-lobby');
         startMainSync();
         startHeartbeat();
+        startTurnTimer();
     }
 
     async function handleSignup() {
@@ -1136,70 +1138,86 @@
     }
 
     async function handleCellClick(r, c) {
-        if (!currentRoomId || !currentUser) return;
+        if (!currentRoomId || !currentUser || timeoutProcessing) return;
 
-        // [오류 수정] 화면의 오래된 globalData가 아니라 Firebase의 최신 방 상태를 사용
-        // 주기적 동기화 때문에 방금 둔 돌/턴이 다시 이전 상태로 덮어써지는 문제 방지
-        const room = await fetchFreshRoom(currentRoomId);
-        if (!room || room.status !== 'playing') return;
+        // 화면에 표시된 방을 먼저 사용해 즉시 착수한다.
+        // 이전 버전처럼 클릭할 때 별도의 GET 요청을 기다리면 주기적 동기화와
+        // 타이머가 끼어들어 착수 결과가 화면에서 사라지는 문제가 생길 수 있다.
+        const cachedRoom = globalData.rooms[currentRoomId];
+        if (!cachedRoom || cachedRoom.status !== 'playing') return;
 
-        const player = room.players?.[currentUser.id];
+        const player = cachedRoom.players?.[currentUser.id];
         const myTeam = player?.team;
-        if (myTeam !== room.turn || (myTeam !== 'blue' && myTeam !== 'red')) return;
+        if (myTeam !== cachedRoom.turn || (myTeam !== 'blue' && myTeam !== 'red')) return;
 
-        const boardSize = room.boardSize || 8;
+        const boardSize = cachedRoom.boardSize || 8;
 
         const isValidBoard =
-            Array.isArray(room.board) &&
-            room.board.length === boardSize &&
-            room.board.every(row => Array.isArray(row) && row.length === boardSize);
+            Array.isArray(cachedRoom.board) &&
+            cachedRoom.board.length === boardSize &&
+            cachedRoom.board.every(row => Array.isArray(row) && row.length === boardSize);
 
         if (!isValidBoard) {
-            room.board = createInitialBoard(boardSize);
+            cachedRoom.board = createInitialBoard(boardSize);
         }
 
-        // 30초가 이미 지난 경우 클릭보다 자동 착수를 우선
-        if (room.turnStartedAt && Date.now() - Number(room.turnStartedAt) >= 30000) {
+        // 이미 제한시간이 끝났다면 클릭 착수 대신 타임아웃 처리를 한다.
+        if (cachedRoom.turnStartedAt && Date.now() - Number(cachedRoom.turnStartedAt) >= 30000) {
             await processTurnTimeout();
             return;
         }
 
-        const flips = getFlips(room.board, boardSize, r, c, myTeam);
+        const flips = getFlips(cachedRoom.board, boardSize, r, c, myTeam);
         if (flips.length === 0) return;
 
-        room.board[r][c] = myTeam;
-        flips.forEach(f => { room.board[f.r][f.c] = myTeam; });
+        // 중복 클릭/동시 처리 방지
+        timeoutProcessing = true;
 
-        const nextTeam = myTeam === 'blue' ? 'red' : 'blue';
-        const nextMoves = getValidMoves(room.board, boardSize, nextTeam);
+        try {
+            // 착수 즉시 로컬 상태를 변경하여 사용자가 누른 돌이 바로 보이게 한다.
+            cachedRoom.board[r][c] = myTeam;
+            flips.forEach(f => { cachedRoom.board[f.r][f.c] = myTeam; });
 
-        if (nextMoves.length > 0) {
-            room.turn = nextTeam;
-            room.turnStartedAt = Date.now();
-        } else {
-            const currentMoves = getValidMoves(room.board, boardSize, myTeam);
+            const nextTeam = myTeam === 'blue' ? 'red' : 'blue';
+            const nextMoves = getValidMoves(cachedRoom.board, boardSize, nextTeam);
 
-            if (currentMoves.length > 0) {
-                // 상대팀이 둘 곳이 없으면 같은 팀이 한 번 더 진행
-                room.turn = myTeam;
-                room.turnStartedAt = Date.now();
+            if (nextMoves.length > 0) {
+                cachedRoom.turn = nextTeam;
+                cachedRoom.turnStartedAt = Date.now();
             } else {
-                room.status = 'ended';
-                const { blue, red } = countDiscs(room.board, boardSize);
-                if (blue > red) room.winner = 'blue';
-                else if (red > blue) room.winner = 'red';
-                else room.winner = 'draw';
+                // 상대팀이 둘 곳이 없으면 현재 팀이 한 번 더 진행
+                const currentMoves = getValidMoves(cachedRoom.board, boardSize, myTeam);
 
-                if (!room.resultRecorded) {
-                    room.resultRecorded = true;
-                    await saveSpecificData('rooms/' + currentRoomId, room);
-                    await updatePlayerWins(room);
-                    return;
+                if (currentMoves.length > 0) {
+                    cachedRoom.turn = myTeam;
+                    cachedRoom.turnStartedAt = Date.now();
+                } else {
+                    cachedRoom.status = 'ended';
+                    const { blue, red } = countDiscs(cachedRoom.board, boardSize);
+                    if (blue > red) cachedRoom.winner = 'blue';
+                    else if (red > blue) cachedRoom.winner = 'red';
+                    else cachedRoom.winner = 'draw';
+
+                    if (!cachedRoom.resultRecorded) {
+                        cachedRoom.resultRecorded = true;
+                        globalData.rooms[currentRoomId] = cachedRoom;
+                        renderGameView(cachedRoom);
+                        await saveSpecificData('rooms/' + currentRoomId, cachedRoom);
+                        await updatePlayerWins(cachedRoom);
+                        return;
+                    }
                 }
             }
-        }
 
-        await saveSpecificData('rooms/' + currentRoomId, room);
+            // 로컬 화면을 먼저 갱신
+            globalData.rooms[currentRoomId] = cachedRoom;
+            renderGameView(cachedRoom);
+
+            // 그 다음 Firebase에 전체 방 상태 저장
+            await saveSpecificData('rooms/' + currentRoomId, cachedRoom);
+        } finally {
+            timeoutProcessing = false;
+        }
     }
 
     async function updatePlayerWins(room) {
