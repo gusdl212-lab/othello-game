@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.14 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.15 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.14 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.15 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.14 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.15 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -292,7 +292,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.14.html';
+        a.download = 'othello_v2.15.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -311,7 +311,7 @@
         return userId;
     }
 
-    // [v2.14] 게임판 상태의 단조 증가 버전.
+    // [v2.15] 게임판 상태의 단조 증가 버전.
     // Firebase의 오래된 GET 응답이 현재 게임 상태를 덮어쓰지 못하게 한다.
     function getStateVersion(room) {
         const v = Number(room?.stateVersion);
@@ -441,7 +441,7 @@
                     const incomingCurrentRoom = currentRoomId ? incomingRooms[currentRoomId] : null;
 
                     /*
-                     * [v2.14 핵심 수정]
+                     * [v2.15 핵심 수정]
                      * 기존 v2.13은 turnStartedAt을 비교했지만, Firebase에서 오래된 전체 방
                      * 데이터가 같은 턴 정보와 함께 도착하는 경우를 완전히 막지 못했다.
                      *
@@ -454,31 +454,9 @@
                      *   오래된 GET 응답 -> 무시
                      *   상대방의 새 착수 -> 더 높은 stateVersion -> 정상 반영
                      */
-                    if (
-                        currentRoomId &&
-                        localCurrentRoom &&
-                        localCurrentRoom.status === 'playing' &&
-                        incomingCurrentRoom &&
-                        incomingCurrentRoom.status === 'playing'
-                    ) {
-                        const localVersion = getStateVersion(localCurrentRoom);
-                        const incomingVersion = getStateVersion(incomingCurrentRoom);
-
-                        if (incomingVersion <= localVersion) {
-                            // 오래된/동일 버전은 게임 상태를 덮어쓰지 않는다.
-                            // 채팅만 최신 응답이 있으면 반영한다.
-                            if (Array.isArray(incomingCurrentRoom.chat)) {
-                                localCurrentRoom.chat = incomingCurrentRoom.chat;
-                            }
-                            incomingRooms[currentRoomId] = localCurrentRoom;
-                        }
-                    } else if (
-                        roomWriteInProgress &&
-                        currentRoomId &&
-                        localCurrentRoom &&
-                        (!incomingCurrentRoom || incomingCurrentRoom.status === 'playing')
-                    ) {
-                        // 저장 중에는 로컬 게임 상태를 유지한다.
+                    if (currentRoomId && roomWriteInProgress && localCurrentRoom) {
+                        // 착수/타임아웃 중에는 주기적 GET 응답이 화면의 최신 로컬 상태를
+                        // 덮어쓰지 못하게 한다. 저장 성공 여부는 ETag PUT이 결정한다.
                         incomingRooms[currentRoomId] = localCurrentRoom;
                     }
 
@@ -577,6 +555,48 @@
         try {
             await fetch(`${FIREBASE_BASE_URL}/${path}.json`, { method: 'DELETE' });
         } catch (e) {}
+    }
+
+    // [v2.15 핵심] 게임방은 전체 상태 PUT 시 ETag 조건부 저장을 사용한다.
+    // 두 컴퓨터가 동시에 같은 오래된 방 데이터를 저장해서 서로의 착수를
+    // 덮어쓰는 것을 Firebase 레벨에서 차단한다.
+    async function fetchRoomWithETag(roomId) {
+        try {
+            const url = `${FIREBASE_BASE_URL}/rooms/${encodeURIComponent(roomId)}.json?clientTime=${Date.now()}`;
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: { 'X-Firebase-ETag': 'true' },
+                cache: 'no-store'
+            });
+            if (!res.ok) return null;
+            return {
+                room: await res.json(),
+                etag: res.headers.get('ETag')
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function saveRoomWithETag(roomId, room, etag) {
+        try {
+            const url = `${FIREBASE_BASE_URL}/rooms/${encodeURIComponent(roomId)}.json`;
+            const res = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'If-Match': etag || '*'
+                },
+                body: JSON.stringify(room)
+            });
+
+            return {
+                ok: res.ok,
+                conflict: res.status === 412
+            };
+        } catch (e) {
+            return { ok: false, conflict: false };
+        }
     }
 
     function switchAuthMode(mode) {
@@ -1040,7 +1060,7 @@
             // 착수 중인 전체 방 저장을 덮어쓰는 경쟁 상태를 만들지 않는다.
         }
 
-        // [v2.14] 기존 방에 상태 버전이 없으면 0으로 취급한다.
+        // [v2.15] 기존 방에 상태 버전이 없으면 0으로 취급한다.
         // 여기서는 Firebase에 별도 저장하지 않아 렌더링 자체가 게임 상태를 덮어쓰지 않는다.
         if (!Number.isFinite(Number(room.stateVersion))) {
             room.stateVersion = 0;
@@ -1130,24 +1150,26 @@
     }
 
     async function processTurnTimeout() {
-        if (timeoutProcessing || !currentRoomId || !currentUser) return;
+        if (timeoutProcessing || !currentRoomId || !currentUser || roomWriteInProgress) return;
 
-        const cachedRoom = globalData.rooms[currentRoomId];
-        if (!cachedRoom || cachedRoom.status !== 'playing' || !cachedRoom.turnStartedAt) return;
-
-        if (Date.now() - Number(cachedRoom.turnStartedAt) < 30000) return;
-
+        const roomId = currentRoomId;
         timeoutProcessing = true;
         roomWriteInProgress = true;
 
         try {
-            // 타이머도 현재 화면이 사용하는 최신 로컬 방 상태를 기준으로 처리한다.
-            // 여기서 별도의 GET을 하면 이전 Firebase 데이터가 돌아와 방금 둔 돌을
-            // 다시 초기 상태로 덮어쓸 수 있으므로 사용하지 않는다.
-            const room = globalData.rooms[currentRoomId];
-            if (!room || room.status !== 'playing' || !room.turnStartedAt) return;
+            // [v2.15] 타임아웃도 반드시 Firebase 최신 상태 + ETag를 기준으로 처리한다.
+            // 두 컴퓨터에서 동시에 30초가 되어도 한 쪽만 조건부 PUT에 성공한다.
+            const fresh = await fetchRoomWithETag(roomId);
+            if (!fresh || !fresh.room) return;
 
-            if (Date.now() - Number(room.turnStartedAt) < 30000) return;
+            const room = fresh.room;
+            if (currentRoomId !== roomId || room.status !== 'playing' || !room.turnStartedAt) return;
+
+            if (Date.now() - Number(room.turnStartedAt) < 30000) {
+                globalData.rooms[roomId] = room;
+                renderGameView(room);
+                return;
+            }
 
             const boardSize = room.boardSize || 8;
             if (!Array.isArray(room.board) ||
@@ -1158,16 +1180,13 @@
 
             const team = room.turn;
             const validMoves = getValidMoves(room.board, boardSize, team);
-            let stateChanged = false;
 
-            // 제한시간 내에 수를 두지 못하면 가능한 수 중 하나를 무작위로 자동 착수
             if (validMoves.length > 0) {
                 const move = validMoves[Math.floor(Math.random() * validMoves.length)];
                 const flips = getFlips(room.board, boardSize, move.r, move.c, team);
 
                 room.board[move.r][move.c] = team;
                 flips.forEach(f => { room.board[f.r][f.c] = team; });
-                stateChanged = true;
             }
 
             const nextTeam = team === 'blue' ? 'red' : 'blue';
@@ -1176,38 +1195,44 @@
             if (nextMoves.length > 0) {
                 room.turn = nextTeam;
                 room.turnStartedAt = Date.now();
-                stateChanged = true;
             } else {
                 const currentMoves = getValidMoves(room.board, boardSize, team);
 
                 if (currentMoves.length > 0) {
-                    // 상대팀이 둘 곳이 없으면 같은 팀이 한 번 더 진행
                     room.turn = team;
                     room.turnStartedAt = Date.now();
-                    stateChanged = true;
                 } else {
                     room.status = 'ended';
                     const { blue, red } = countDiscs(room.board, boardSize);
                     if (blue > red) room.winner = 'blue';
                     else if (red > blue) room.winner = 'red';
                     else room.winner = 'draw';
-
-                    if (!room.resultRecorded) {
-                        room.resultRecorded = true;
-                        await saveSpecificData('rooms/' + currentRoomId, room);
-                        await updatePlayerWins(room);
-                        return;
-                    }
+                    room.resultRecorded = !!room.resultRecorded;
                 }
             }
 
-            if (stateChanged) {
-                room.stateVersion = getStateVersion(room) + 1;
+            room.stateVersion = getStateVersion(room) + 1;
+
+            globalData.rooms[roomId] = room;
+            renderGameView(room);
+
+            const saved = await saveRoomWithETag(roomId, room, fresh.etag);
+
+            if (!saved.ok) {
+                // 다른 컴퓨터가 먼저 처리했다. 그 최신 상태만 받아온다.
+                const latest = await fetchFreshRoom(roomId);
+                if (latest) {
+                    globalData.rooms[roomId] = latest;
+                    renderGameView(latest);
+                }
+                return;
             }
 
-            globalData.rooms[currentRoomId] = room;
-            renderGameView(room);
-            await saveSpecificData('rooms/' + currentRoomId, room);
+            if (room.status === 'ended' && room.winner && !room.resultRecorded) {
+                room.resultRecorded = true;
+                await saveSpecificData(`rooms/${roomId}/resultRecorded`, true);
+                await updatePlayerWins(room);
+            }
         } finally {
             roomWriteInProgress = false;
             timeoutProcessing = false;
@@ -1215,94 +1240,107 @@
     }
 
     async function handleCellClick(r, c) {
-        if (!currentRoomId || !currentUser || timeoutProcessing) return;
+        if (!currentRoomId || !currentUser || timeoutProcessing || roomWriteInProgress) return;
 
-        // 화면에 표시된 방을 먼저 사용해 즉시 착수한다.
-        // 이전 버전처럼 클릭할 때 별도의 GET 요청을 기다리면 주기적 동기화와
-        // 타이머가 끼어들어 착수 결과가 화면에서 사라지는 문제가 생길 수 있다.
-        const cachedRoom = globalData.rooms[currentRoomId];
-        if (!cachedRoom || cachedRoom.status !== 'playing') return;
-
-        const player = cachedRoom.players?.[currentUser.id];
-        const myTeam = player?.team;
-        if (myTeam !== cachedRoom.turn || (myTeam !== 'blue' && myTeam !== 'red')) return;
-
-        const boardSize = cachedRoom.boardSize || 8;
-
-        const isValidBoard =
-            Array.isArray(cachedRoom.board) &&
-            cachedRoom.board.length === boardSize &&
-            cachedRoom.board.every(row => Array.isArray(row) && row.length === boardSize);
-
-        if (!isValidBoard) {
-            cachedRoom.board = createInitialBoard(boardSize);
-        }
-
-        // 이미 제한시간이 끝났다면 클릭 착수 대신 타임아웃 처리를 한다.
-        if (cachedRoom.turnStartedAt && Date.now() - Number(cachedRoom.turnStartedAt) >= 30000) {
-            await processTurnTimeout();
-            return;
-        }
-
-        const flips = getFlips(cachedRoom.board, boardSize, r, c, myTeam);
-        if (flips.length === 0) return;
-
-        // 중복 클릭/동시 처리 방지 + 주기적 Firebase 동기화가 오래된 상태를 덮어쓰는 것 방지
-        timeoutProcessing = true;
+        const roomId = currentRoomId;
         roomWriteInProgress = true;
 
         try {
-            // 착수 즉시 로컬 상태를 변경하여 사용자가 누른 돌이 바로 보이게 한다.
-            cachedRoom.board[r][c] = myTeam;
-            flips.forEach(f => { cachedRoom.board[f.r][f.c] = myTeam; });
+            // [v2.15] 클릭 순간 Firebase의 최신 방 + ETag를 가져온다.
+            // 로컬 캐시를 기준으로 전체 방을 PUT하던 구조를 제거해
+            // 서로 다른 컴퓨터의 오래된 게임판이 저장되는 것을 방지한다.
+            const fresh = await fetchRoomWithETag(roomId);
+            if (!fresh || !fresh.room) return;
+
+            const room = fresh.room;
+            if (currentRoomId !== roomId || room.status !== 'playing') return;
+
+            const player = room.players?.[currentUser.id];
+            const myTeam = player?.team;
+            if (myTeam !== room.turn || (myTeam !== 'blue' && myTeam !== 'red')) {
+                globalData.rooms[roomId] = room;
+                renderGameView(room);
+                return;
+            }
+
+            const boardSize = room.boardSize || 8;
+            if (!Array.isArray(room.board) ||
+                room.board.length !== boardSize ||
+                !room.board.every(row => Array.isArray(row) && row.length === boardSize)) {
+                room.board = createInitialBoard(boardSize);
+            }
+
+            // 제한시간이 이미 끝났으면 타임아웃 처리.
+            if (room.turnStartedAt && Date.now() - Number(room.turnStartedAt) >= 30000) {
+                globalData.rooms[roomId] = room;
+                await processTurnTimeout();
+                return;
+            }
+
+            const flips = getFlips(room.board, boardSize, r, c, myTeam);
+            if (flips.length === 0) {
+                globalData.rooms[roomId] = room;
+                renderGameView(room);
+                return;
+            }
+
+            // 최신 Firebase 상태에서 착수한다.
+            room.board[r][c] = myTeam;
+            flips.forEach(f => { room.board[f.r][f.c] = myTeam; });
 
             const nextTeam = myTeam === 'blue' ? 'red' : 'blue';
-            const nextMoves = getValidMoves(cachedRoom.board, boardSize, nextTeam);
-            let stateChanged = true;
+            const nextMoves = getValidMoves(room.board, boardSize, nextTeam);
 
             if (nextMoves.length > 0) {
-                cachedRoom.turn = nextTeam;
-                cachedRoom.turnStartedAt = Date.now();
+                room.turn = nextTeam;
+                room.turnStartedAt = Date.now();
             } else {
-                // 상대팀이 둘 곳이 없으면 현재 팀이 한 번 더 진행
-                const currentMoves = getValidMoves(cachedRoom.board, boardSize, myTeam);
+                const currentMoves = getValidMoves(room.board, boardSize, myTeam);
 
                 if (currentMoves.length > 0) {
-                    cachedRoom.turn = myTeam;
-                    cachedRoom.turnStartedAt = Date.now();
+                    // 상대팀이 둘 곳이 없으면 같은 팀이 한 번 더.
+                    room.turn = myTeam;
+                    room.turnStartedAt = Date.now();
                 } else {
-                    cachedRoom.status = 'ended';
-                    const { blue, red } = countDiscs(cachedRoom.board, boardSize);
-                    if (blue > red) cachedRoom.winner = 'blue';
-                    else if (red > blue) cachedRoom.winner = 'red';
-                    else cachedRoom.winner = 'draw';
-
-                    if (!cachedRoom.resultRecorded) {
-                        cachedRoom.resultRecorded = true;
-                        cachedRoom.stateVersion = getStateVersion(cachedRoom) + 1;
-                        globalData.rooms[currentRoomId] = cachedRoom;
-                        renderGameView(cachedRoom);
-                        await saveSpecificData('rooms/' + currentRoomId, cachedRoom);
-                        await updatePlayerWins(cachedRoom);
-                        return;
-                    }
+                    room.status = 'ended';
+                    const { blue, red } = countDiscs(room.board, boardSize);
+                    if (blue > red) room.winner = 'blue';
+                    else if (red > blue) room.winner = 'red';
+                    else room.winner = 'draw';
+                    room.resultRecorded = !!room.resultRecorded;
                 }
             }
 
-            // 게임 상태가 실제로 변경되었으므로 버전을 증가시킨다.
-            if (stateChanged) {
-                cachedRoom.stateVersion = getStateVersion(cachedRoom) + 1;
+            room.stateVersion = getStateVersion(room) + 1;
+
+            // Firebase에 저장하기 전에 내 화면을 최신 상태로 만든다.
+            globalData.rooms[roomId] = room;
+            renderGameView(room);
+
+            // ETag가 바뀌었다면 다른 컴퓨터가 먼저 착수한 것이므로
+            // 이 저장은 실패하고, 절대로 상대방의 착수를 덮어쓰지 않는다.
+            const saved = await saveRoomWithETag(roomId, room, fresh.etag);
+
+            if (!saved.ok) {
+                // 충돌 시 Firebase의 최신 상태를 받아서 화면을 그 상태로 맞춘다.
+                const latest = await fetchFreshRoom(roomId);
+                if (latest) {
+                    globalData.rooms[roomId] = latest;
+                    renderGameView(latest);
+                }
+                return;
             }
 
-            // 로컬 화면을 먼저 갱신
-            globalData.rooms[currentRoomId] = cachedRoom;
-            renderGameView(cachedRoom);
+            // 저장 성공 후 다시 최신 로컬 상태를 유지한다.
+            globalData.rooms[roomId] = room;
 
-            // 그 다음 Firebase에 전체 방 상태 저장
-            await saveSpecificData('rooms/' + currentRoomId, cachedRoom);
+            if (room.status === 'ended' && room.winner && !room.resultRecorded) {
+                room.resultRecorded = true;
+                await saveSpecificData(`rooms/${roomId}/resultRecorded`, true);
+                await updatePlayerWins(room);
+            }
         } finally {
             roomWriteInProgress = false;
-            timeoutProcessing = false;
         }
     }
 
