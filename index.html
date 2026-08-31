@@ -99,7 +99,6 @@
         <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.12</span>
     </div>
 
-    <!-- [뷰 1] 로그인 / 회원가입 화면 -->
     <div id="view-auth" class="card auth-box hidden">
         <div id="form-login">
             <h3 style="text-align:center; color:#66fcf1;">🔐 로그인</h3>
@@ -142,7 +141,6 @@
         </div>
     </div>
 
-    <!-- [뷰 2] 로비 화면 -->
     <div id="view-lobby" class="card hidden">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div>
@@ -184,7 +182,6 @@
         </div>
     </div>
 
-    <!-- [뷰 3] 방 대기실 -->
     <div id="view-room" class="card hidden">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -233,7 +230,6 @@
         </div>
     </div>
 
-    <!-- [뷰 4] 게임 플레이 화면 -->
     <div id="view-game" class="card hidden">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -279,6 +275,7 @@
     let heartbeatInterval = null;
     let hasPlayedConfetti = false;
     let whisperTarget = null; 
+    let isLocallyPlaying = false; // 동기화 덮어씌움 방지 플래그
 
     function downloadLatestCode() {
         const htmlContent = document.documentElement.outerHTML;
@@ -441,6 +438,7 @@
             const room = globalData.rooms[currentRoomId];
             if (!room) {
                 currentRoomId = null;
+                isLocallyPlaying = false;
                 localStorage.removeItem('othello_session_room');
                 switchView('view-lobby');
                 alert("방이 폭파되었거나 종료되었습니다.");
@@ -451,7 +449,10 @@
         if (!currentRoomId) {
             renderLobbyView();
         } else {
-            renderRoomOrGameView();
+            // 로컬 착수 직후라면 서버 fetch로 인한 보드 깜빡임/리셋 방지
+            if (!isLocallyPlaying) {
+                renderRoomOrGameView();
+            }
         }
     }
 
@@ -475,6 +476,7 @@
                 await removeSpecificData('rooms/' + rId);
                 if (currentRoomId === rId) {
                     currentRoomId = null;
+                    isLocallyPlaying = false;
                     localStorage.removeItem('othello_session_room');
                     switchView('view-lobby');
                 }
@@ -566,6 +568,7 @@
     function handleLogout() {
         currentUser = null;
         currentRoomId = null;
+        isLocallyPlaying = false;
         localStorage.removeItem('othello_session_user');
         localStorage.removeItem('othello_session_room');
         if (syncInterval) clearInterval(syncInterval);
@@ -762,9 +765,9 @@
             turn: 'blue'
         };
 
-        // 방 생성과 동시에 파이어베이스에 저장하고 즉시 currentRoomId 세팅 후 뷰 전환
         await saveSpecificData('rooms/' + roomId, newRoom);
         currentRoomId = roomId;
+        isLocallyPlaying = false;
         localStorage.setItem('othello_session_room', roomId);
         
         await fetchSystemData();
@@ -782,6 +785,7 @@
 
         await saveSpecificData('rooms/' + roomId + '/players', room.players);
         currentRoomId = roomId;
+        isLocallyPlaying = false;
         localStorage.setItem('othello_session_room', roomId);
         renderRoomOrGameView();
     }
@@ -790,6 +794,7 @@
         const room = globalData.rooms[currentRoomId];
         if (!room) {
             currentRoomId = null;
+            isLocallyPlaying = false;
             localStorage.removeItem('othello_session_room');
             switchView('view-lobby');
             return;
@@ -884,6 +889,7 @@
         room.turn = 'blue';
         room.scoreRecorded = false;
         hasPlayedConfetti = false;
+        isLocallyPlaying = false;
 
         await saveSpecificData('rooms/' + currentRoomId, room);
         renderRoomOrGameView();
@@ -894,6 +900,7 @@
         if (confirm("방을 폭파하시겠습니까?")) {
             await removeSpecificData('rooms/' + currentRoomId);
             currentRoomId = null;
+            isLocallyPlaying = false;
             localStorage.removeItem('othello_session_room');
             switchView('view-lobby');
         }
@@ -904,6 +911,7 @@
             await removeSpecificData('rooms/' + rId);
             if (currentRoomId === rId) {
                 currentRoomId = null;
+                isLocallyPlaying = false;
                 localStorage.removeItem('othello_session_room');
                 switchView('view-lobby');
             }
@@ -929,6 +937,7 @@
             }
         }
         currentRoomId = null;
+        isLocallyPlaying = false;
         localStorage.removeItem('othello_session_room');
         switchView('view-lobby');
     }
@@ -946,7 +955,6 @@
         
         if (!room.board || !Array.isArray(room.board) || room.board.length !== size) {
             room.board = initBoard(size);
-            saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
         }
 
         const boardEl = document.getElementById('othello-board');
@@ -1056,7 +1064,7 @@
 
     async function handleCellClick(r, c) {
         if (!currentRoomId) return;
-        await fetchSystemData();
+        
         let room = globalData.rooms[currentRoomId];
         if (!room || room.status !== 'playing') return;
 
@@ -1069,47 +1077,60 @@
 
         let size = room.boardSize || 8;
         let board = room.board;
+        if (!board) board = initBoard(size);
+
         let validMoves = getValidMoves(board, room.turn, size);
         let moveValid = validMoves.some(m => m.r === r && m.c === c);
-
         if (!moveValid) return;
+
+        // 로컬 착수 플래그 켜서 동기화 인터벌 충돌 원천 차단
+        isLocallyPlaying = true;
 
         let player = room.turn;
         let opponent = player === 'blue' ? 'red' : 'blue';
         let directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
-        board[r][c] = player;
+        // Deep copy board to avoid reference mutation bugs
+        let newBoard = board.map(row => [...row]);
+        newBoard[r][c] = player;
+
         for (let [dr, dc] of directions) {
             let nr = r + dr, nc = c + dc;
             let toFlip = [];
 
-            while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr] && board[nr][nc] === opponent) {
+            while (nr >= 0 && nr < size && nc >= 0 && nc < size && newBoard[nr] && newBoard[nr][nc] === opponent) {
                 toFlip.push({ r: nr, c: nc });
                 nr += dr;
                 nc += dc;
             }
 
-            if (toFlip.length > 0 && nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr] && board[nr][nc] === player) {
+            if (toFlip.length > 0 && nr >= 0 && nr < size && nc >= 0 && nc < size && newBoard[nr] && newBoard[nr][nc] === player) {
                 toFlip.forEach(p => {
-                    board[p.r][p.c] = player;
+                    newBoard[p.r][p.c] = player;
                 });
             }
         }
 
         let nextTurn = opponent;
-        let nextValidMoves = getValidMoves(board, nextTurn, size);
+        let nextValidMoves = getValidMoves(newBoard, nextTurn, size);
         if (nextValidMoves.length === 0) {
             nextTurn = player; 
         }
 
-        room.board = board;
+        room.board = newBoard;
         room.turn = nextTurn;
 
-        // 부분 업데이트 대신 board와 turn만 정확히 패치하도록 수정하여 리셋 현상 원천 차단
+        // 로컬 데이터 즉시 반영 후 렌더링
+        renderGameView(room);
+
+        // 파이어베이스에 순차적으로 안정 저장
         await saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
         await saveSpecificData('rooms/' + currentRoomId + '/turn', room.turn);
-        
-        renderRoomOrGameView();
+
+        // 저장 완료 후 잠시 뒤 플래그 해제
+        setTimeout(() => {
+            isLocallyPlaying = false;
+        }, 500);
     }
 
     async function recordWinForTeam(room, winningTeam) {
@@ -1132,6 +1153,7 @@
         if (!currentRoomId) return;
         await removeSpecificData('rooms/' + currentRoomId);
         currentRoomId = null;
+        isLocallyPlaying = false;
         localStorage.removeItem('othello_session_room');
         switchView('view-lobby');
     }
@@ -1142,7 +1164,6 @@
         const text = input.value.trim();
         if (!text) return;
 
-        await fetchSystemData();
         let room = globalData.rooms[currentRoomId];
         if (!room) return;
 
@@ -1152,6 +1173,7 @@
 
         await saveSpecificData('rooms/' + currentRoomId + '/chat', room.chat);
         input.value = '';
+        renderGameChat(room);
     }
 
     function renderGameChat(room) {
