@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.9 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.10 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.9 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.10 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.9 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.10 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -288,7 +288,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.9.html';
+        a.download = 'othello_v2.10.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -723,7 +723,7 @@
     function setWhisperTarget(targetId) {
         if (currentUser && targetId === currentUser.id) return;
         whisperTarget = targetId;
-        document.getElementById('chat-target-indicator.').innerText = `[→ ${targetId} 님에게 귓속말]`;
+        document.getElementById('chat-target-indicator').innerText = `[→ ${targetId} 님에게 귓속말]`;
         document.getElementById('lobby-chat-input').placeholder = `${targetId}님에게 귓속말 입력...`;
     }
 
@@ -918,22 +918,22 @@
             explodeGameBtn.classList.add('hidden');
         }
 
-        // 🛡️ [수정된 부분] board가 아직 없거나 비어있을 때 발생하는 오류(TypeError) 방지 코드
-        if (!room.board || !Array.isArray(room.board) || room.board.length === 0) {
-            const size = room.boardSize || 8;
+        // 🛡️ [완벽 방어 수정] board가 null, undefined이거나 유효한 배열이 아닐 경우 즉시 생성하여 바인딩
+        const size = room.boardSize || 8;
+        if (!room.board || !Array.isArray(room.board) || room.board.length === 0 || !Array.isArray(room.board[0])) {
             room.board = createInitialBoard(size);
         }
 
-        const size = room.board.length;
+        const currentSize = room.board.length;
         const boardEl = document.getElementById('othello-board');
-        boardEl.className = `othello-board size-${size}`;
+        boardEl.className = `othello-board size-${currentSize}`;
 
         let blueCount = 0;
         let redCount = 0;
 
         let boardHtml = '';
-        for (let r = 0; r < size; r++) {
-            for (let c = 0; c < size; c++) {
+        for (let r = 0; r < currentSize; r++) {
+            for (let c = 0; c < currentSize; c++) {
                 const disc = room.board[r][c];
                 if (disc === 'blue') blueCount++;
                 if (disc === 'red') redCount++;
