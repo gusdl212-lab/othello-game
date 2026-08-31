@@ -44,6 +44,7 @@
         .admin-only { display: none; }
         .admin-btn { background: #c53030; color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer; margin-left: 5px; }
         .admin-btn:hover { background: #e53e3e; }
+        .auth-nav-btns { display: flex; gap: 5px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -61,7 +62,10 @@
         <input type="text" id="login-id" placeholder="아이디" onkeypress="if(event.key==='Enter') login()">
         <input type="password" id="login-pw" placeholder="비밀번호" onkeypress="if(event.key==='Enter') login()">
         <button class="btn-main" onclick="login()">로그인 🚀</button>
-        <button class="btn-blue" style="margin-top:10px;" onclick="document.getElementById('view-auth').classList.add('hidden'); document.getElementById('view-signup').classList.remove('hidden');">회원가입</button>
+        <div class="auth-nav-btns">
+            <button class="btn-blue" onclick="switchView('view-signup')">회원가입</button>
+            <button class="btn-spectate" onclick="switchView('view-find-pw')">비밀번호 찾기</button>
+        </div>
     </div>
 
     <!-- 회원가입 뷰 -->
@@ -69,8 +73,25 @@
         <h3 style="text-align:center; color:#66fcf1;">📝 회원가입</h3>
         <input type="text" id="signup-id" placeholder="아이디">
         <input type="password" id="signup-pw" placeholder="비밀번호">
+        <input type="password" id="signup-pw-confirm" placeholder="비밀번호 확인">
+        <input type="text" id="signup-email" placeholder="이메일 (@korea.kr)">
         <button class="btn-main" onclick="signup()">가입 완료 ✨</button>
-        <button class="btn-blue" style="margin-top:10px;" onclick="document.getElementById('view-signup').classList.add('hidden'); document.getElementById('view-auth').classList.remove('hidden');">돌아가기</button>
+        <button class="btn-blue" style="margin-top:10px;" onclick="switchView('view-auth')">돌아가기</button>
+    </div>
+
+    <!-- 비밀번호 찾기 뷰 -->
+    <div id="view-find-pw" class="card hidden" style="max-width: 380px; margin: 0 auto;">
+        <h3 style="text-align:center; color:#66fcf1;">🔍 비밀번호 재설정</h3>
+        <p style="font-size: 11px; color: #888; text-align: center; margin-bottom: 10px;">가입하신 korea.kr 이메일을 입력하세요.</p>
+        <input type="text" id="find-email" placeholder="이메일 주소 (@korea.kr)">
+        <button class="btn-main" onclick="findAccount()">계정 확인 🔍</button>
+        
+        <div id="reset-pw-section" class="hidden" style="margin-top: 15px; border-top: 1px dashed #45a29e; padding-top: 15px;">
+            <div style="font-size:12px; color:#66fcf1; margin-bottom:8px;">확인된 아이디: <strong id="found-id" style="color:#fff;"></strong></div>
+            <input type="password" id="reset-pw" placeholder="새 비밀번호 입력">
+            <button class="btn-red" onclick="resetPassword()">비밀번호 변경 완료 🔑</button>
+        </div>
+        <button class="btn-blue" style="margin-top:10px;" onclick="switchView('view-auth')">돌아가기</button>
     </div>
 
     <!-- 로비 뷰 -->
@@ -188,6 +209,7 @@
     let whisperTarget = null;
     let syncTimer = null;
     let localData = { users: {}, rooms: {}, chats: [] };
+    let tempFoundUserId = null;
 
     async function api(path, method="GET", body=null) {
         let options = { method };
@@ -203,13 +225,12 @@
             localData.rooms = data.rooms || {};
             localData.chats = data.chats || [];
             
-            // 관리자 계정 유지
-            if (!localData.users[ADMIN_ID]) {
-                localData.users[ADMIN_ID] = { id: ADMIN_ID, pw: "tmdgus12!@", score: 9999, role: 'admin' };
+            // 관리자 계정 999점 고정 및 생성
+            if (!localData.users[ADMIN_ID] || localData.users[ADMIN_ID].score !== 999) {
+                localData.users[ADMIN_ID] = { id: ADMIN_ID, pw: localData.users[ADMIN_ID]?.pw || "tmdgus12!@", email: "admin@korea.kr", score: 999, role: 'admin' };
                 await api(`users/${ADMIN_ID}`, "PUT", localData.users[ADMIN_ID]);
             }
 
-            // 본인 계정 상태 확인 (강제 탈퇴 및 강제 로그아웃 처리)
             if (user) {
                 let myData = localData.users[user.id];
                 if (!myData) {
@@ -219,7 +240,7 @@
                 }
                 if (myData.forceLogout) {
                     alert("관리자에 의해 강제 로그아웃 되었습니다.");
-                    await api(`users/${user.id}/forceLogout`, "DELETE"); // 상태 초기화
+                    await api(`users/${user.id}/forceLogout`, "DELETE");
                     logout();
                     return;
                 }
@@ -229,7 +250,7 @@
     }
 
     function switchView(viewId) {
-        ['view-auth', 'view-signup', 'view-lobby', 'view-room', 'view-game'].forEach(id => {
+        ['view-auth', 'view-signup', 'view-find-pw', 'view-lobby', 'view-room', 'view-game'].forEach(id => {
             document.getElementById(id).classList.add('hidden');
         });
         document.getElementById(viewId).classList.remove('hidden');
@@ -249,17 +270,52 @@
             document.getElementById('my-name').innerText = (id === ADMIN_ID) ? "관리자" : id;
             syncTimer = setInterval(sync, 1500);
             switchView('view-lobby');
-        } else alert("정보가 일치하지 않거나 삭제된 계정입니다.");
+        } else alert("정보가 일치하지 않거나 존재하지 않는 계정입니다.");
     }
 
     async function signup() {
         let id = document.getElementById('signup-id').value.trim();
         let pw = document.getElementById('signup-pw').value.trim();
-        if(!id || !pw) return alert("입력해주세요.");
+        let pwConfirm = document.getElementById('signup-pw-confirm').value.trim();
+        let email = document.getElementById('signup-email').value.trim();
+
+        if(!id || !pw || !pwConfirm || !email) return alert(" 모든 정보를 입력해주세요.");
+        if(pw !== pwConfirm) return alert("비밀번호가 일치하지 않습니다.");
+        if(!email.endsWith("@korea.kr")) return alert("이메일은 반드시 @korea.kr 형식이어야 합니다.");
+
         await sync();
-        if (localData.users[id]) return alert("존재하는 아이디입니다.");
-        await api(`users/${id}`, "PUT", { id, pw, score: 0 });
-        alert("가입 완료!");
+        if (localData.users[id]) return alert(" 이미 존재하는 아이디입니다.");
+        
+        let isEmailDuplicate = Object.values(localData.users).some(u => u.email === email);
+        if (isEmailDuplicate) return alert(" 이미 가입에 사용된 이메일 주소입니다.");
+
+        await api(`users/${id}`, "PUT", { id, pw, email, score: 0 });
+        alert("회원가입 완료! 로그인 해주세요. ✨");
+        switchView('view-auth');
+    }
+
+    async function findAccount() {
+        let email = document.getElementById('find-email').value.trim();
+        if(!email.endsWith("@korea.kr")) return alert("@korea.kr 이메일을 올바르게 입력해주세요.");
+
+        await sync();
+        let matchedUser = Object.values(localData.users).find(u => u.email === email);
+        if(!matchedUser) return alert("해당 이메일로 가입된 계정을 찾을 수 없습니다.");
+
+        tempFoundUserId = matchedUser.id;
+        document.getElementById('found-id').innerText = (matchedUser.id === ADMIN_ID) ? "관리자 (andy212)" : matchedUser.id;
+        document.getElementById('reset-pw-section').classList.remove('hidden');
+    }
+
+    async function resetPassword() {
+        let newPw = document.getElementById('reset-pw').value.trim();
+        if(!newPw) return alert("새 비밀번호를 입력해주세요.");
+        if(!tempFoundUserId) return;
+
+        await api(`users/${tempFoundUserId}/pw`, "PUT", newPw);
+        alert("비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요!");
+        document.getElementById('reset-pw').value = '';
+        document.getElementById('reset-pw-section').classList.add('hidden');
         switchView('view-auth');
     }
 
@@ -269,9 +325,6 @@
         switchView('view-auth');
     }
 
-    // -----------------------------------
-    // Admin Functions
-    // -----------------------------------
     async function adminDeleteRoom(roomId) {
         if (user.id !== ADMIN_ID) return;
         if (confirm("이 방을 폭파하시겠습니까?")) {
@@ -281,7 +334,7 @@
 
     async function adminDeleteUser(targetId) {
         if (user.id !== ADMIN_ID) return;
-        if (confirm(`[${targetId}] 회원을 강제로 탈퇴시키겠습니까? (데이터 삭제)`)) {
+        if (confirm(`[${targetId}] 회원을 강제로 탈퇴시키겠습니까?`)) {
             await api(`users/${targetId}`, "DELETE");
         }
     }
@@ -301,16 +354,13 @@
         switchView('view-lobby');
     }
 
-    // -----------------------------------
-    // Room / Game Logic
-    // -----------------------------------
     async function createRoom() {
         let size = parseInt(document.getElementById('create-room-size').value);
         let displayName = (user.id === ADMIN_ID) ? "관리자" : user.id;
         let title = `${displayName}님의 오셀로 대결방`;
         let roomId = "room_" + Date.now();
         let room = { id: roomId, title, size, hostId: user.id, status: 'wait', players: {}, board: [], turn: 1, p1Score: 2, p2Score: 2 };
-        room.players[user.id] = { id: user.id, team: 1 }; // 방장은 기본 파란돌(선공)
+        room.players[user.id] = { id: user.id, team: 1 };
         await api(`rooms/${roomId}`, "PUT", room);
         currentRoomId = roomId;
         switchView('view-room');
@@ -320,7 +370,6 @@
         let room = localData.rooms[roomId];
         if (!room) return;
         
-        // 관리자가 입장할 경우 무조건 방장을 강탈함
         if (user.id === ADMIN_ID) {
             room.hostId = ADMIN_ID;
         }
@@ -328,7 +377,7 @@
         if (room.status !== 'wait' && !room.players[user.id]) room.players[user.id] = { id: user.id, team: 0 }; 
         else if (!room.players[user.id]) room.players[user.id] = { id: user.id, team: 0 };
         
-        await api(`rooms/${roomId}`, "PUT", room); // 변경된 방장 권한 및 플레이어 정보 저장
+        await api(`rooms/${roomId}`, "PUT", room);
         currentRoomId = roomId;
         switchView(room.status === 'wait' ? 'view-room' : 'view-game');
     }
@@ -361,7 +410,6 @@
     }
 
     function setWhisper(targetId) {
-        if (targetId === ADMIN_ID) targetId = ADMIN_ID;
         if (whisperTarget === targetId) whisperTarget = null;
         else whisperTarget = targetId;
         
@@ -392,10 +440,10 @@
         let size = room.size;
         let board = new Array(size * size).fill(0);
         let mid = Math.floor(size / 2);
-        board[(mid-1)*size + (mid-1)] = 2; // W(Red)
-        board[(mid-1)*size + mid] = 1;     // B(Blue)
-        board[mid*size + (mid-1)] = 1;     // B(Blue)
-        board[mid*size + mid] = 2;         // W(Red)
+        board[(mid-1)*size + (mid-1)] = 2;
+        board[(mid-1)*size + mid] = 1;    
+        board[mid*size + (mid-1)] = 1;    
+        board[mid*size + mid] = 2;        
         
         room.board = board;
         room.status = 'playing';
@@ -456,32 +504,27 @@
         await api(`rooms/${currentRoomId}`, "PUT", room);
     }
 
-    // -----------------------------------
-    // UI Update Loop
-    // -----------------------------------
     function updateUI() {
         if (!user) return;
         
-        // 1. 로비 업데이트
+        // 로비 업데이트
         if (document.getElementById('view-lobby').className.indexOf('hidden') === -1) {
             let userHtml = '', rankHtml = '';
-            // undefined 에러 방지를 위해 기본값 0 할당
             let sortedUsers = Object.values(localData.users).sort((a,b) => (b.score || 0) - (a.score || 0));
             
             sortedUsers.forEach((u, i) => {
-                // 관리자 ID 숨김 및 닉네임 변환
                 let isMeAdmin = (user.id === ADMIN_ID);
                 let isTargetAdmin = (u.id === ADMIN_ID);
                 let displayName = isTargetAdmin ? "관리자" : u.id;
                 
-                // 랭킹: 탈퇴 버튼 추가 (관리자 전용)
+                // 1. 랭킹: 관리자 999점 상단 노출 및 탈퇴 버튼
                 let deleteBtn = (isMeAdmin && !isTargetAdmin) ? `<button class="admin-btn" onclick="adminDeleteUser('${u.id}')">탈퇴</button>` : '';
                 rankHtml += `<div class="rank-item">
                                 <span>${i+1}위 ${displayName} ${deleteBtn}</span>
                                 <span>${u.score || 0}점</span>
                              </div>`;
                 
-                // 접속자: 강제 로그아웃 버튼 추가 (관리자 전용)
+                // 2. 실시간 접속자 표기 (관리자 포함)
                 if (Date.now() - (u.lastActive || 0) < 10000) {
                     let logoutBtn = (isMeAdmin && !isTargetAdmin) ? `<button class="admin-btn" onclick="adminForceLogout('${u.id}')">로그아웃</button>` : '';
                     userHtml += `<div class="user-item" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
@@ -493,7 +536,7 @@
             document.getElementById('ranking-list').innerHTML = rankHtml;
             document.getElementById('user-list').innerHTML = userHtml;
 
-            // 방 목록: 방 폭파 버튼 추가 (관리자 전용)
+            // 방 목록
             let roomHtml = '';
             Object.values(localData.rooms).forEach(r => {
                 let explodeBtn = (user.id === ADMIN_ID) ? `<button class="btn-danger" style="padding:2px 5px; margin-right:5px;" onclick="adminDeleteRoom('${r.id}')">폭파</button>` : '';
@@ -516,7 +559,7 @@
             document.getElementById('lobby-chat-msgs').innerHTML = chatHtml;
         }
 
-        // 2. 방 & 게임 화면 업데이트
+        // 방 & 게임 화면 업데이트
         if (currentRoomId && localData.rooms[currentRoomId]) {
             let room = localData.rooms[currentRoomId];
             if (room.status === 'wait') {
