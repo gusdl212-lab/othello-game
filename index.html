@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.11 - 버그 완벽 해결)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.12 - 버그 완벽 해결)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -38,8 +38,6 @@
         .btn-danger { background: #e53e3e; color: #fff; padding: 5px 10px; font-size: 11px; width: auto; }
         .btn-admin-action { background: #9b2c2c; color: #fff; padding: 2px 6px; font-size: 10px; width: auto; border-radius: 4px; cursor: pointer; }
         .btn-admin-action:hover { background: #c53030; }
-        .btn-ai { background: #d69e2e; color: #fff; }
-        .btn-ai:hover { background: #b7791f; }
         .btn-explode { background: #e53e3e; color: #fff; }
 
         .lobby-grid { display: grid; grid-template-columns: 280px 1fr 240px; gap: 15px; }
@@ -98,7 +96,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.11 (버그 완벽 해결)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.12</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +149,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.11 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.12 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -288,7 +286,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.11.html';
+        a.download = 'othello_v2.12.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -637,11 +635,18 @@
             return;
         }
 
+        const isAdmin = currentUser && currentUser.id === ADMIN_ID;
         let html = '';
         for (const [rId, room] of Object.entries(globalData.rooms)) {
             let playerCount = room.players ? Object.keys(room.players).length : 0;
             let statusText = room.status === 'playing' ? '🔴 대국 중' : '🟢 대기 중';
             let size = room.boardSize || 8;
+            let isRoomHost = currentUser && room.host === currentUser.id;
+
+            let explodeBtnHtml = '';
+            if (isRoomHost || isAdmin) {
+                explodeBtnHtml = `<button class="btn-danger" style="padding:4px 8px; font-size:10px; background:#c53030;" onclick="event.stopPropagation(); explodeSpecificRoom('${rId}')">방폭파</button>`;
+            }
 
             html += `
                 <div class="room-item">
@@ -649,7 +654,10 @@
                         <strong style="color:#66fcf1;">${rId}</strong>
                         <div style="font-size:11px; color:#aaa; margin-top:3px;">상태: ${statusText} | 크기: ${size}x${size} | 인원: ${playerCount}명</div>
                     </div>
-                    <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="joinRoom('${rId}')">입장</button>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        ${explodeBtnHtml}
+                        <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="joinRoom('${rId}')">입장</button>
+                    </div>
                 </div>
             `;
         }
@@ -754,9 +762,12 @@
             turn: 'blue'
         };
 
+        // 방 생성과 동시에 파이어베이스에 저장하고 즉시 currentRoomId 세팅 후 뷰 전환
         await saveSpecificData('rooms/' + roomId, newRoom);
         currentRoomId = roomId;
         localStorage.setItem('othello_session_room', roomId);
+        
+        await fetchSystemData();
         renderRoomOrGameView();
     }
 
@@ -871,6 +882,7 @@
         room.status = 'playing';
         room.board = initBoard(size);
         room.turn = 'blue';
+        room.scoreRecorded = false;
         hasPlayedConfetti = false;
 
         await saveSpecificData('rooms/' + currentRoomId, room);
@@ -884,6 +896,18 @@
             currentRoomId = null;
             localStorage.removeItem('othello_session_room');
             switchView('view-lobby');
+        }
+    }
+
+    async function explodeSpecificRoom(rId) {
+        if (confirm(`'${rId}' 방을 폭파하시겠습니까?`)) {
+            await removeSpecificData('rooms/' + rId);
+            if (currentRoomId === rId) {
+                currentRoomId = null;
+                localStorage.removeItem('othello_session_room');
+                switchView('view-lobby');
+            }
+            await fetchSystemData();
         }
     }
 
@@ -920,7 +944,6 @@
 
         const size = room.boardSize || 8;
         
-        // [버그 수정 핵심] board 데이터가 없거나 형식이 잘못되었을 경우 자동 초기화
         if (!room.board || !Array.isArray(room.board) || room.board.length !== size) {
             room.board = initBoard(size);
             saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
@@ -975,7 +998,6 @@
         }
         boardEl.innerHTML = html;
 
-        // 게임 종료 판정
         let blueMoves = getValidMoves(board, 'blue', size);
         let redMoves = getValidMoves(board, 'red', size);
 
@@ -1083,7 +1105,10 @@
         room.board = board;
         room.turn = nextTurn;
 
-        await saveSpecificData('rooms/' + currentRoomId, room);
+        // 부분 업데이트 대신 board와 turn만 정확히 패치하도록 수정하여 리셋 현상 원천 차단
+        await saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
+        await saveSpecificData('rooms/' + currentRoomId + '/turn', room.turn);
+        
         renderRoomOrGameView();
     }
 
