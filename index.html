@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.10 - 게임 오류 수정)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.11 - 버그 완벽 해결)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,9 +98,10 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.10 (게임 오류 수정 완료)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.11 (버그 완벽 해결)</span>
     </div>
 
+    <!-- [뷰 1] 로그인 / 회원가입 화면 -->
     <div id="view-auth" class="card auth-box hidden">
         <div id="form-login">
             <h3 style="text-align:center; color:#66fcf1;">🔐 로그인</h3>
@@ -143,13 +144,14 @@
         </div>
     </div>
 
+    <!-- [뷰 2] 로비 화면 -->
     <div id="view-lobby" class="card hidden">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div>
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.10 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.11 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -184,6 +186,7 @@
         </div>
     </div>
 
+    <!-- [뷰 3] 방 대기실 -->
     <div id="view-room" class="card hidden">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -232,6 +235,7 @@
         </div>
     </div>
 
+    <!-- [뷰 4] 게임 플레이 화면 -->
     <div id="view-game" class="card hidden">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -284,7 +288,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.10.html';
+        a.download = 'othello_v2.11.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -792,7 +796,7 @@
     function renderRoomView(room) {
         document.getElementById('display-room-id').innerText = currentRoomId;
 
-        const isHost = room.host === currentUser.id || (currentUser && currentUser.id === ADMIN_ID);
+        const isHost = (room.host === currentUser.id) || (currentUser && currentUser.id === ADMIN_ID);
         const hostControls = document.getElementById('room-host-controls');
         const explodeBtn = document.getElementById('btn-explode-room');
 
@@ -906,26 +910,33 @@
     }
 
     function renderGameView(room) {
-        const isHost = room.host === currentUser.id || (currentUser && currentUser.id === ADMIN_ID);
+        const isHost = (room.host === currentUser.id) || (currentUser && currentUser.id === ADMIN_ID);
         const explodeGameBtn = document.getElementById('btn-explode-game');
-        if (isHost || (currentUser && currentUser.id === ADMIN_ID)) {
+        if (isHost) {
             explodeGameBtn.classList.remove('hidden');
         } else {
             explodeGameBtn.classList.add('hidden');
         }
 
         const size = room.boardSize || 8;
+        
+        // [버그 수정 핵심] board 데이터가 없거나 형식이 잘못되었을 경우 자동 초기화
+        if (!room.board || !Array.isArray(room.board) || room.board.length !== size) {
+            room.board = initBoard(size);
+            saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
+        }
+
         const boardEl = document.getElementById('othello-board');
         boardEl.className = `othello-board size-${size}`;
 
         let blueCount = 0;
         let redCount = 0;
-        let board = room.board || initBoard(size);
+        let board = room.board;
 
         for (let r = 0; r < size; r++) {
             for (let c = 0; c < size; c++) {
-                if (board[r][c] === 'blue') blueCount++;
-                if (board[r][c] === 'red') redCount++;
+                if (board[r] && board[r][c] === 'blue') blueCount++;
+                if (board[r] && board[r][c] === 'red') redCount++;
             }
         }
 
@@ -951,7 +962,7 @@
         let html = '';
         for (let r = 0; r < size; r++) {
             for (let c = 0; c < size; c++) {
-                let cellVal = board[r][c];
+                let cellVal = board[r] ? board[r][c] : null;
                 let isValid = isMyTurn && validMoves.some(m => m.r === r && m.c === c);
 
                 let content = '';
@@ -977,7 +988,6 @@
                 hasPlayedConfetti = true;
                 if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
                 
-                // 승리 점수 반영 로직
                 if (blueCount > redCount) {
                     recordWinForTeam(room, 'blue');
                 } else if (redCount > blueCount) {
@@ -998,20 +1008,20 @@
 
         for (let r = 0; r < size; r++) {
             for (let c = 0; c < size; c++) {
-                if (board[r][c] !== null) continue;
+                if (!board[r] || board[r][c] !== null) continue;
 
                 let isValid = false;
                 for (let [dr, dc] of directions) {
                     let nr = r + dr, nc = c + dc;
                     let hasOpponentBetween = false;
 
-                    while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === opponent) {
+                    while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr] && board[nr][nc] === opponent) {
                         hasOpponentBetween = true;
                         nr += dr;
                         nc += dc;
                     }
 
-                    if (hasOpponentBetween && nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === player) {
+                    if (hasOpponentBetween && nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr] && board[nr][nc] === player) {
                         isValid = true;
                         break;
                     }
@@ -1042,7 +1052,6 @@
 
         if (!moveValid) return;
 
-        // 돌 뒤집기 수행
         let player = room.turn;
         let opponent = player === 'blue' ? 'red' : 'blue';
         let directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
@@ -1052,24 +1061,23 @@
             let nr = r + dr, nc = c + dc;
             let toFlip = [];
 
-            while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === opponent) {
+            while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr] && board[nr][nc] === opponent) {
                 toFlip.push({ r: nr, c: nc });
                 nr += dr;
                 nc += dc;
             }
 
-            if (toFlip.length > 0 && nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === player) {
+            if (toFlip.length > 0 && nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr] && board[nr][nc] === player) {
                 toFlip.forEach(p => {
                     board[p.r][p.c] = player;
                 });
             }
         }
 
-        // 턴 넘기기
         let nextTurn = opponent;
         let nextValidMoves = getValidMoves(board, nextTurn, size);
         if (nextValidMoves.length === 0) {
-            nextTurn = player; // 상대방 둘 곳이 없으면 다시 내 턴
+            nextTurn = player; 
         }
 
         room.board = board;
