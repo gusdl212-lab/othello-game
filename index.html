@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.10 - 버그 패치)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.10.1 - 동기화 충돌 및 에러 완벽 해결)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -95,7 +95,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.10 (널 포인터 에러 패치)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.10.1 (동기화 충돌 완벽 해결)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -148,7 +148,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.10 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.10.1 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -285,7 +285,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.10.html';
+        a.download = 'othello_v2.10.1.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -400,10 +400,11 @@
             if (res.ok) {
                 let data = await res.json();
                 if (data) {
+                    // 게임 중인 방의 보드/턴이 서버 동기화로 인해 리셋되는 현상 완벽 방지
                     if (data.rooms && globalData.rooms) {
                         for (let rId in data.rooms) {
-                            if (globalData.rooms[rId] && globalData.rooms[rId].board && data.rooms[rId].board) {
-                                if (currentRoomId === rId && globalData.rooms[rId].status === 'playing') {
+                            if (currentRoomId === rId && globalData.rooms[rId] && globalData.rooms[rId].status === 'playing') {
+                                if (globalData.rooms[rId].board) {
                                     data.rooms[rId].board = globalData.rooms[rId].board;
                                     data.rooms[rId].turn = globalData.rooms[rId].turn;
                                 }
@@ -936,7 +937,6 @@
     }
 
     function renderGame(room) {
-        // [방어 코드 추가] board 데이터가 아직 동기화되지 않았거나 null인 경우 에러 방지
         if (!room.board || !Array.isArray(room.board)) return;
 
         const size = room.boardSize || 8;
@@ -994,6 +994,7 @@
         const flipped = getFlippedDiscs(room.board, r, c, room.turn, size);
         if (flipped.length === 0) return; 
 
+        // [최적화] 로컬 상태 즉시 반영 (낙관적 업데이트)
         room.board[r][c] = room.turn;
         flipped.forEach(([fr, fc]) => {
             room.board[fr][fc] = room.turn;
@@ -1001,9 +1002,12 @@
 
         room.turn = room.turn === 'blue' ? 'red' : 'blue';
 
+        // 즉시 화면 렌더링
+        renderGame(room);
+
+        // 비동기 서버 저장
         await saveSpecificData(`rooms/${currentRoomId}/board`, room.board);
         await saveSpecificData(`rooms/${currentRoomId}/turn`, room.turn);
-        renderGame(room);
     }
 
     function getFlippedDiscs(board, r, c, turn, size) {
