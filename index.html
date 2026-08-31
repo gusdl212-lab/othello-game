@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.11 - 관리자 게임/폭파 권한 수정)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.11 - 관리자 방 폭파 및 게임 완벽 수정)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -38,8 +38,6 @@
         .btn-danger { background: #e53e3e; color: #fff; padding: 5px 10px; font-size: 11px; width: auto; }
         .btn-admin-action { background: #9b2c2c; color: #fff; padding: 2px 6px; font-size: 10px; width: auto; border-radius: 4px; cursor: pointer; }
         .btn-admin-action:hover { background: #c53030; }
-        .btn-ai { background: #d69e2e; color: #fff; }
-        .btn-ai:hover { background: #b7791f; }
         .btn-explode { background: #e53e3e; color: #fff; }
 
         .lobby-grid { display: grid; grid-template-columns: 280px 1fr 240px; gap: 15px; }
@@ -82,7 +80,6 @@
         .disc { width: 80%; height: 80%; border-radius: 50%; box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
         .disc.blue { background: #3182ce; border: 2px solid #63b3ed; }
         .disc.red { background: #e53e3e; border: 2px solid #feb2b2; }
-        .valid-hint { width: 25%; height: 25%; border-radius: 50%; background: rgba(255, 255, 255, 0.5); }
 
         .hidden { display: none !important; }
         .game-chat-panel { background: #121821; border-radius: 8px; border: 1px solid #2d3748; display: flex; flex-direction: column; height: 420px; padding: 10px; }
@@ -98,7 +95,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.11 (관리자 게임/폭파 권한 수정)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.11 (관리자 방 폭파/게임 완벽 수정)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -595,6 +592,16 @@
         }
     }
 
+    // 🛠️ [신규 추가] 로비 방 목록에서 관리자가 직접 방을 폭파하는 기능
+    async function adminExplodeRoomFromLobby(rId) {
+        if (!currentUser || currentUser.id !== ADMIN_ID) return;
+        if (confirm(`[관리자 권한] '${rId}' 방을 강제로 폭파하시겠습니까?`)) {
+            await removeSpecificData('rooms/' + rId);
+            alert("해당 방이 폭파되었습니다.");
+            fetchSystemData();
+        }
+    }
+
     function renderLobbyView() {
         renderRanking();
         renderRoomList();
@@ -647,17 +654,28 @@
             return;
         }
 
+        const isAdmin = currentUser && currentUser.id === ADMIN_ID;
         let html = '';
         for (const [rId, room] of Object.entries(globalData.rooms)) {
             const playersCount = room.players ? Object.keys(room.players).length : 0;
             const statusText = room.gameState === 'playing' ? '🔴 대국 중' : '🟢 대기 중';
+            
+            // 🛠️ [수정] 관리자 계정일 경우 방 목록에서 바로 폭파 버튼 표시
+            let adminExplodeBtn = '';
+            if (isAdmin) {
+                adminExplodeBtn = `<button class="btn-explode" style="width:auto; padding:5px 8px; font-size:10px; margin-right:4px;" onclick="adminExplodeRoomFromLobby('${rId}')">방폭파</button>`;
+            }
+
             html += `
                 <div class="room-item">
                     <div>
                         <strong style="color:#66fcf1;">${room.title || rId}</strong>
                         <div style="font-size:11px; color:#888;">인원: ${playersCount}명 | 상태: ${statusText}</div>
                     </div>
-                    <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="joinRoom('${rId}')">입장</button>
+                    <div style="display:flex; gap:4px; align-items:center;">
+                        ${adminExplodeBtn}
+                        <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="joinRoom('${rId}')">입장</button>
+                    </div>
                 </div>
             `;
         }
@@ -876,8 +894,7 @@
         const hostControls = document.getElementById('room-host-controls');
         const explodeBtn = document.getElementById('btn-explode-room');
 
-        // 🛠️ [수정] 관리자 계정일 때 방 대기실에서도 방 폭파 버튼이 무조건 보이도록 수정
-        if (currentUser.id === ADMIN_ID) {
+        if (currentUser.id === ADMIN_ID || isHost) {
             explodeBtn.classList.remove('hidden');
         } else {
             explodeBtn.classList.add('hidden');
@@ -885,9 +902,6 @@
 
         if (isHost) {
             hostControls.classList.remove('hidden');
-            if (room.host === currentUser.id) {
-                explodeBtn.classList.remove('hidden');
-            }
             document.getElementById('room-board-size').value = room.boardSize || 8;
         } else {
             hostControls.classList.add('hidden');
@@ -900,7 +914,7 @@
         if (room.players) {
             for (const [pId, pData] of Object.entries(room.players)) {
                 const displayName = getDisplayName(pId);
-                const itemHtml = `<li class="user-item"><span>${displayName}</span></li>`;
+                const itemHtml = `<li class="user-item"><span>${displayName} (${pData.team})</span></li>`;
                 if (pData.team === 'blue') blueList += itemHtml;
                 else if (pData.team === 'red') redList += itemHtml;
                 else specList += itemHtml;
@@ -919,7 +933,6 @@
         const isAdmin = currentUser.id === ADMIN_ID;
         const explodeGameBtn = document.getElementById('btn-explode-game');
         
-        // 🛠️ [수정] 게임 플레이 화면에서도 관리자 및 방장이면 폭파 버튼 표시
         if (isAdmin || room.host === currentUser.id) {
             explodeGameBtn.classList.remove('hidden');
         } else {
@@ -975,16 +988,12 @@
 
         const playerInfo = room.players && room.players[currentUser.id];
         
-        // 🛠️ [수정] 관리자 계정도 팀에 참가했다면 정상적으로 돌을 둘 수 있도록 예외처리 수정 (관전자이거나 팀이 없을 때만 제한)
         if (!playerInfo) {
-            if (currentUser.id === ADMIN_ID) {
-                return alert("관리자 계정은 파란팀 또는 빨간팀에 참가한 후에 돌을 둘 수 있습니다.");
-            }
-            return alert("관전자는 돌을 놓을 수 없습니다.");
+            return alert("관전자이거나 팀에 참가하지 않았습니다. 대기실에서 팀을 선택해주세요!");
         }
 
         if (playerInfo.team !== room.turn) {
-            return alert("차례가 아닙니다!");
+            return alert(`차례가 아닙니다!\n(내 팀: ${playerInfo.team === 'blue' ? '파란팀' : '빨간팀'}, 현재 턴: ${room.turn === 'blue' ? '파란팀' : '빨간팀'})`);
         }
 
         const discColor = room.turn;
@@ -992,7 +1001,7 @@
 
         let flipped = getFlippedDiscs(room.board, r, c, discColor);
         if (flipped.length === 0) {
-            return alert("여기에 돌을 놓을 수 없습니다!");
+            return alert("여기에 돌을 놓을 수 없습니다! 상대방 돌을 뒤집을 수 있는 위치에 놓아주세요.");
         }
 
         room.board[r][c] = discColor;
