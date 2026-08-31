@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.9 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.10 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.9 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.10 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.9 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.10 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -281,6 +281,8 @@
     let heartbeatInterval = null;
     let hasPlayedConfetti = false;
     let whisperTarget = null; 
+    let turnTimerInterval = null;
+    let timeoutProcessing = false;
 
     function downloadLatestCode() {
         const htmlContent = document.documentElement.outerHTML;
@@ -288,7 +290,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.9.html';
+        a.download = 'othello_v2.10.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -393,6 +395,23 @@
                 await saveSpecificData('users/' + currentUser.id + '/lastActive', now);
             }
         }, 5000);
+    }
+
+    function startTurnTimer() {
+        if (turnTimerInterval) clearInterval(turnTimerInterval);
+
+        turnTimerInterval = setInterval(() => {
+            if (!currentUser || !currentRoomId) return;
+
+            const room = globalData.rooms[currentRoomId];
+            if (!room || room.status !== 'playing') return;
+
+            updateTurnTimerDisplay(room);
+
+            if (room.turnStartedAt && Date.now() - Number(room.turnStartedAt) >= 30000) {
+                processTurnTimeout();
+            }
+        }, 250);
     }
 
     function startMainSync() {
@@ -575,6 +594,9 @@
         localStorage.removeItem('othello_session_room');
         if (syncInterval) clearInterval(syncInterval);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
+        if (turnTimerInterval) clearInterval(turnTimerInterval);
+        turnTimerInterval = null;
+        timeoutProcessing = false;
         switchView('view-auth');
     }
 
@@ -936,6 +958,8 @@
         room.status = 'playing';
         room.board = createInitialBoard(room.boardSize || 8);
         room.turn = 'blue';
+        room.turnStartedAt = Date.now();
+        room.winner = null;
         hasPlayedConfetti = false;
         await saveSpecificData('rooms/' + currentRoomId, room);
     }
@@ -945,8 +969,7 @@
         const boardEl = document.getElementById('othello-board');
         boardEl.className = `othello-board size-${boardSize}`;
 
-        // [오류 수정] Firebase에 board가 null이거나 행 배열이 비정상인 기존 방이 남아 있을 경우
-        // room.board[r][c]에서 "Cannot read properties of null (reading '0')" 오류가 발생하지 않도록 복구
+        // [오류 수정] 기존 방의 board가 null/비정상 데이터일 경우 자동 복구
         const isValidBoard =
             Array.isArray(room.board) &&
             room.board.length === boardSize &&
@@ -955,6 +978,12 @@
         if (!isValidBoard) {
             room.board = createInitialBoard(boardSize);
             saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
+        }
+
+        // [시간 제한] 기존 게임에 타이머 정보가 없으면 지금부터 30초를 시작
+        if (room.status === 'playing' && !Number.isFinite(Number(room.turnStartedAt))) {
+            room.turnStartedAt = Date.now();
+            saveSpecificData('rooms/' + currentRoomId + '/turnStartedAt', room.turnStartedAt);
         }
 
         if (currentUser.id === ADMIN_ID) document.getElementById('btn-explode-game').classList.remove('hidden');
@@ -975,7 +1004,7 @@
 
         const turnBadge = document.getElementById('game-turn-badge');
         if (room.status === 'ended') {
-            turnBadge.innerText = `🏆 게임 종료 - 승리: ${room.winner === 'blue' ? '🔵 파란팀' : (room.winner === 'red' ? '🔴 빨간팀' : '무승부')}`;
+            turnBadge.innerHTML = `🏆 게임 종료 - 승리: ${room.winner === 'blue' ? '🔵 파란팀' : (room.winner === 'red' ? '🔴 빨간팀' : '무승부')}`;
             document.getElementById('btn-back-lobby').classList.remove('hidden');
             if (!hasPlayedConfetti && room.winner) {
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -983,7 +1012,8 @@
             }
         } else {
             document.getElementById('btn-back-lobby').classList.add('hidden');
-            turnBadge.innerText = `현재 턴: ${room.turn === 'blue' ? '🔵 파란팀' : '🔴 빨간팀'} ${isSpectator ? '(👁️ 관전 중)' : ''}`;
+            turnBadge.innerHTML = `현재 턴: ${room.turn === 'blue' ? '🔵 파란팀' : '🔴 빨간팀'} ${isSpectator ? '(👁️ 관전 중)' : ''} <span id="turn-timer" style="display:inline-block; margin-left:10px; font-size:16px; color:#ffd700;">⏱️ 30초</span>`;
+            updateTurnTimerDisplay(room);
         }
 
         let validMoves = (!isSpectator && room.turn === myTeam && room.status === 'playing') ? getValidMoves(room.board, boardSize, myTeam) : [];
@@ -1003,14 +1033,137 @@
         renderGameChat(room);
     }
 
+    function updateTurnTimerDisplay(room) {
+        const timerEl = document.getElementById('turn-timer');
+        if (!timerEl) return;
+
+        if (!room || room.status !== 'playing' || !room.turnStartedAt) {
+            timerEl.innerText = '';
+            return;
+        }
+
+        const elapsed = Math.floor((Date.now() - Number(room.turnStartedAt)) / 1000);
+        const remaining = Math.max(0, 30 - elapsed);
+        timerEl.innerText = `⏱️ ${remaining}초`;
+
+        if (remaining <= 5) {
+            timerEl.style.color = '#e53e3e';
+        } else {
+            timerEl.style.color = '#ffd700';
+        }
+    }
+
+    async function fetchFreshRoom(roomId) {
+        try {
+            const res = await fetch(`${FIREBASE_BASE_URL}/rooms/${encodeURIComponent(roomId)}.json`);
+            if (!res.ok) return null;
+            return await res.json();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function processTurnTimeout() {
+        if (timeoutProcessing || !currentRoomId || !currentUser) return;
+
+        const cachedRoom = globalData.rooms[currentRoomId];
+        if (!cachedRoom || cachedRoom.status !== 'playing' || !cachedRoom.turnStartedAt) return;
+
+        if (Date.now() - Number(cachedRoom.turnStartedAt) < 30000) return;
+
+        timeoutProcessing = true;
+
+        try {
+            // 클릭과 동일하게 항상 최신 Firebase 데이터를 기준으로 처리하여
+            // 1.5초 주기 동기화와 타이머가 서로의 수를 덮어쓰지 않게 함
+            const room = await fetchFreshRoom(currentRoomId);
+            if (!room || room.status !== 'playing' || !room.turnStartedAt) return;
+
+            if (Date.now() - Number(room.turnStartedAt) < 30000) return;
+
+            const boardSize = room.boardSize || 8;
+            if (!Array.isArray(room.board) ||
+                room.board.length !== boardSize ||
+                !room.board.every(row => Array.isArray(row) && row.length === boardSize)) {
+                room.board = createInitialBoard(boardSize);
+            }
+
+            const team = room.turn;
+            const validMoves = getValidMoves(room.board, boardSize, team);
+
+            // 제한시간 내에 수를 두지 못하면 가능한 수 중 하나를 무작위로 자동 착수
+            if (validMoves.length > 0) {
+                const move = validMoves[Math.floor(Math.random() * validMoves.length)];
+                const flips = getFlips(room.board, boardSize, move.r, move.c, team);
+
+                room.board[move.r][move.c] = team;
+                flips.forEach(f => { room.board[f.r][f.c] = team; });
+            }
+
+            const nextTeam = team === 'blue' ? 'red' : 'blue';
+            const nextMoves = getValidMoves(room.board, boardSize, nextTeam);
+
+            if (nextMoves.length > 0) {
+                room.turn = nextTeam;
+                room.turnStartedAt = Date.now();
+            } else {
+                const currentMoves = getValidMoves(room.board, boardSize, team);
+
+                if (currentMoves.length > 0) {
+                    // 상대팀이 둘 곳이 없으면 같은 팀이 한 번 더 진행
+                    room.turn = team;
+                    room.turnStartedAt = Date.now();
+                } else {
+                    room.status = 'ended';
+                    const { blue, red } = countDiscs(room.board, boardSize);
+                    if (blue > red) room.winner = 'blue';
+                    else if (red > blue) room.winner = 'red';
+                    else room.winner = 'draw';
+
+                    if (!room.resultRecorded) {
+                        room.resultRecorded = true;
+                        await saveSpecificData('rooms/' + currentRoomId, room);
+                        await updatePlayerWins(room);
+                        return;
+                    }
+                }
+            }
+
+            await saveSpecificData('rooms/' + currentRoomId, room);
+        } finally {
+            timeoutProcessing = false;
+        }
+    }
+
     async function handleCellClick(r, c) {
         if (!currentRoomId || !currentUser) return;
-        const room = globalData.rooms[currentRoomId];
+
+        // [오류 수정] 화면의 오래된 globalData가 아니라 Firebase의 최신 방 상태를 사용
+        // 주기적 동기화 때문에 방금 둔 돌/턴이 다시 이전 상태로 덮어써지는 문제 방지
+        const room = await fetchFreshRoom(currentRoomId);
         if (!room || room.status !== 'playing') return;
-        const myTeam = room.players[currentUser.id]?.team;
-        if (myTeam !== room.turn) return;
+
+        const player = room.players?.[currentUser.id];
+        const myTeam = player?.team;
+        if (myTeam !== room.turn || (myTeam !== 'blue' && myTeam !== 'red')) return;
 
         const boardSize = room.boardSize || 8;
+
+        const isValidBoard =
+            Array.isArray(room.board) &&
+            room.board.length === boardSize &&
+            room.board.every(row => Array.isArray(row) && row.length === boardSize);
+
+        if (!isValidBoard) {
+            room.board = createInitialBoard(boardSize);
+        }
+
+        // 30초가 이미 지난 경우 클릭보다 자동 착수를 우선
+        if (room.turnStartedAt && Date.now() - Number(room.turnStartedAt) >= 30000) {
+            await processTurnTimeout();
+            return;
+        }
+
         const flips = getFlips(room.board, boardSize, r, c, myTeam);
         if (flips.length === 0) return;
 
@@ -1022,16 +1175,30 @@
 
         if (nextMoves.length > 0) {
             room.turn = nextTeam;
+            room.turnStartedAt = Date.now();
         } else {
-            if (getValidMoves(room.board, boardSize, myTeam).length === 0) {
+            const currentMoves = getValidMoves(room.board, boardSize, myTeam);
+
+            if (currentMoves.length > 0) {
+                // 상대팀이 둘 곳이 없으면 같은 팀이 한 번 더 진행
+                room.turn = myTeam;
+                room.turnStartedAt = Date.now();
+            } else {
                 room.status = 'ended';
                 const { blue, red } = countDiscs(room.board, boardSize);
                 if (blue > red) room.winner = 'blue';
                 else if (red > blue) room.winner = 'red';
                 else room.winner = 'draw';
-                await updatePlayerWins(room);
+
+                if (!room.resultRecorded) {
+                    room.resultRecorded = true;
+                    await saveSpecificData('rooms/' + currentRoomId, room);
+                    await updatePlayerWins(room);
+                    return;
+                }
             }
         }
+
         await saveSpecificData('rooms/' + currentRoomId, room);
     }
 
