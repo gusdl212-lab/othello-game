@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.9 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.10 - 버그 패치)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -38,8 +38,6 @@
         .btn-danger { background: #e53e3e; color: #fff; padding: 5px 10px; font-size: 11px; width: auto; }
         .btn-admin-action { background: #9b2c2c; color: #fff; padding: 2px 6px; font-size: 10px; width: auto; border-radius: 4px; cursor: pointer; }
         .btn-admin-action:hover { background: #c53030; }
-        .btn-ai { background: #d69e2e; color: #fff; }
-        .btn-ai:hover { background: #b7791f; }
         .btn-explode { background: #e53e3e; color: #fff; }
 
         .lobby-grid { display: grid; grid-template-columns: 280px 1fr 240px; gap: 15px; }
@@ -82,7 +80,6 @@
         .disc { width: 80%; height: 80%; border-radius: 50%; box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
         .disc.blue { background: #3182ce; border: 2px solid #63b3ed; }
         .disc.red { background: #e53e3e; border: 2px solid #feb2b2; }
-        .valid-hint { width: 25%; height: 25%; border-radius: 50%; background: rgba(255, 255, 255, 0.5); }
 
         .hidden { display: none !important; }
         .game-chat-panel { background: #121821; border-radius: 8px; border: 1px solid #2d3748; display: flex; flex-direction: column; height: 420px; padding: 10px; }
@@ -98,7 +95,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.9 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.10 (널 포인터 에러 패치)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +148,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.9 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.10 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -288,7 +285,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.9.html';
+        a.download = 'othello_v2.10.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -307,19 +304,16 @@
         return userId;
     }
 
-    // 승수/점수 및 전체 유저 비율(퍼센트)에 따른 단 자동 계산 함수
     function calculateDan(user, sortedUsers) {
         if (user.id === ADMIN_ID) return "마스터(관리자)";
         const score = user.score || 0;
         if (score === 0) return "0승 (무단)";
 
         const totalUsers = sortedUsers.length;
-        // 관리자 제외 일반 유저들 중에서의 순위 계산
         const normalUsers = sortedUsers.filter(u => u.id !== ADMIN_ID);
         const rankIndex = normalUsers.findIndex(u => u.id === user.id);
         const percentile = totalUsers > 1 ? (rankIndex / totalUsers) * 100 : 0;
 
-        // 예시 백분율/점수 기준 단 시스템 (상위 % 또는 승수에 따라 자동 부여)
         if (percentile <= 5 || score >= 20) return "5단 (고수)";
         if (percentile <= 15 || score >= 15) return "4단";
         if (percentile <= 30 || score >= 10) return "3단";
@@ -406,6 +400,17 @@
             if (res.ok) {
                 let data = await res.json();
                 if (data) {
+                    if (data.rooms && globalData.rooms) {
+                        for (let rId in data.rooms) {
+                            if (globalData.rooms[rId] && globalData.rooms[rId].board && data.rooms[rId].board) {
+                                if (currentRoomId === rId && globalData.rooms[rId].status === 'playing') {
+                                    data.rooms[rId].board = globalData.rooms[rId].board;
+                                    data.rooms[rId].turn = globalData.rooms[rId].turn;
+                                }
+                            }
+                        }
+                    }
+
                     globalData.users = data.users || {};
                     globalData.rooms = data.rooms || {};
                     globalData.lobbyChat = data.lobbyChat || [];
@@ -650,103 +655,85 @@
             return;
         }
 
-        const isAdmin = currentUser && currentUser.id === ADMIN_ID;
         let html = '';
         for (const [rId, room] of Object.entries(globalData.rooms)) {
-            const playerCount = Object.keys(room.players || {}).length;
-            const isPlaying = room.status === 'playing' || room.status === 'paused';
-            const statusBadge = isPlaying ? '<span style="color:#feb2b2; font-size:11px;">[대국중]</span>' : '<span style="color:#63b3ed; font-size:11px;">[대기중]</span>';
-
-            let explodeBtn = '';
-            if (isAdmin) {
-                explodeBtn = `<button class="btn-danger" style="padding:4px 6px; font-size:10px;" onclick="adminExplodeSpecificRoom('${rId}')">💣 폭파</button>`;
-            }
-
+            const pCount = room.players ? Object.keys(room.players).length : 0;
+            const statusText = room.status === 'playing' ? '🔴 게임중' : '🟢 대기중';
             html += `
                 <div class="room-item">
                     <div>
-                        <strong>${rId}</strong> ${statusBadge}
-                        <div style="font-size:11px; color:#aaa;">인원: ${playerCount}명 / ${room.boardSize || 8}x${room.boardSize || 8}</div>
+                        <strong>${room.title || rId}</strong>
+                        <div style="font-size:11px; color:#888;">상태: ${statusText} | 인원: ${pCount}명</div>
                     </div>
-                    <div style="display:flex; gap:5px; align-items:center;">
-                        ${explodeBtn}
-                        <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:12px;" onclick="joinRoom('${rId}')">참가</button>
-                        <button class="btn-purple" style="width:auto; padding:5px 10px; font-size:12px;" onclick="joinRoomAsSpectator('${rId}')">👁️ 관전</button>
-                    </div>
+                    <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="joinRoom('${rId}')">입장</button>
                 </div>
             `;
         }
         box.innerHTML = html;
     }
 
-    async function adminExplodeSpecificRoom(rId) {
-        if (!currentUser || currentUser.id !== ADMIN_ID) return;
-        if (confirm(`[관리자 권한] '${rId}' 방을 폭파하시겠습니까?`)) {
-            await removeSpecificData('rooms/' + rId);
-            if (currentRoomId === rId) {
-                currentRoomId = null;
-                localStorage.removeItem('othello_session_room');
-                switchView('view-lobby');
-            }
-            fetchSystemData();
-        }
-    }
-
     function renderOnlineUsers() {
         const list = document.getElementById('online-user-list');
-        const countSpan = document.getElementById('online-count');
+        if (!globalData.users) return;
+
         const now = Date.now();
-
-        let activeUsers = Object.values(globalData.users || {}).filter(u => u.id === ADMIN_ID || (now - (u.lastActive || 0)) < 20000);
-        countSpan.innerText = activeUsers.length;
-
-        const isAdmin = currentUser && currentUser.id === ADMIN_ID;
         let html = '';
-        activeUsers.forEach(u => {
-            const isMe = currentUser && u.id === currentUser.id;
-            const displayName = getDisplayName(u.id);
-            
-            let kickBtn = '';
-            if (isAdmin && !isMe && u.id !== ADMIN_ID) {
-                kickBtn = `<button class="btn-admin-action" onclick="adminForceLogout('${u.id}')">로그아웃</button>`;
-            }
+        let count = 0;
 
-            html += `
-                <li class="user-item">
-                    <span onclick="setWhisperTarget('${u.id}')" style="cursor:pointer; flex:1;">${u.id === ADMIN_ID ? '👑 ' : ''}${displayName} ${isMe ? '(나)' : ''}</span>
-                    <div style="display:flex; align-items:center; gap:4px;">
-                        <span style="font-size:10px; color:#66fcf1;">온라인</span>
-                        ${kickBtn}
-                    </div>
-                </li>
-            `;
-        });
+        for (const [uId, uObj] of Object.entries(globalData.users)) {
+            const isOnline = (uId === ADMIN_ID) || (uObj.lastActive && (now - uObj.lastActive < 20000));
+            if (isOnline) {
+                count++;
+                const dispName = getDisplayName(uId);
+                const isMe = currentUser && currentUser.id === uId;
+                const isSelected = whisperTarget === uId;
+                const itemBg = isSelected ? '#45a29e' : '#1f2833';
+
+                let adminActions = '';
+                if (currentUser && currentUser.id === ADMIN_ID && !isMe && uId !== ADMIN_ID) {
+                    adminActions = `<button class="btn-admin-action" onclick="adminForceLogout('${uId}')">로그아웃</button>`;
+                }
+
+                html += `
+                    <li class="user-item" style="background:${itemBg}; cursor:pointer;" onclick="${isMe ? '' : `toggleWhisper('${uId}')`}">
+                        <span>${dispName} ${isMe ? '(나)' : ''}</span>
+                        <div style="display:flex; gap:4px; align-items:center;">
+                            ${isSelected ? '<span style="font-size:10px; color:#fff; font-weight:bold;">귓속말중</span>' : ''}
+                            ${adminActions}
+                        </div>
+                    </li>
+                `;
+            }
+        }
+        document.getElementById('online-count').innerText = count;
         list.innerHTML = html;
     }
 
-    function setWhisperTarget(targetId) {
-        if (currentUser && targetId === currentUser.id) return;
-        if (whisperTarget === targetId) {
+    function toggleWhisper(userId) {
+        if (whisperTarget === userId) {
             whisperTarget = null;
-            document.getElementById('chat-target-indicator').innerText = '';
+            document.getElementById('chat-target-indicator').innerText = "";
         } else {
-            whisperTarget = targetId;
-            document.getElementById('chat-target-indicator').innerText = `(귓속말 ➔ ${getDisplayName(targetId)})`;
+            whisperTarget = userId;
+            document.getElementById(`chat-target-indicator`).innerText = `[귓속말 대상: ${getDisplayName(userId)}]`;
         }
+        renderOnlineUsers();
     }
 
     function renderLobbyChat() {
         const chatBox = document.getElementById('lobby-chat-msgs');
+        if (!globalData.lobbyChat) return;
+
         let html = '';
-        (globalData.lobbyChat || []).forEach(msg => {
-            const senderName = getDisplayName(msg.sender);
-            if (msg.target) {
-                if (currentUser && (msg.sender === currentUser.id || msg.target === currentUser.id)) {
-                    html += `<div class="chat-msg whisper">[귓] <span class="sender">${senderName}</span>: ${msg.text}</div>`;
-                }
-            } else {
-                html += `<div class="chat-msg"><span class="sender">${senderName}</span>: ${msg.text}</div>`;
-            }
+        globalData.lobbyChat.slice(-50).forEach(msg => {
+            const isWhisper = msg.whisperTo;
+            const whisperClass = isWhisper ? 'whisper' : '';
+            const whisperLabel = isWhisper ? `(귓속말 → ${getDisplayName(msg.whisperTo)})` : '';
+            html += `
+                <div class="chat-msg ${whisperClass}">
+                    <span class="sender">${getDisplayName(msg.sender)}</span> ${whisperLabel}: ${msg.text}
+                </div>
+            `;
         });
         chatBox.innerHTML = html;
         chatBox.scrollTop = chatBox.scrollHeight;
@@ -755,362 +742,313 @@
     async function sendLobbyChat() {
         const input = document.getElementById('lobby-chat-input');
         const text = input.value.trim();
-        if (!text || !currentUser) return;
+        if (!text) return;
+
+        const msg = {
+            sender: currentUser.id,
+            text: text,
+            whisperTo: whisperTarget,
+            time: Date.now()
+        };
 
         if (!globalData.lobbyChat) globalData.lobbyChat = [];
-        let newMsg = { sender: currentUser.id, text: text, timestamp: Date.now() };
-        if (whisperTarget) newMsg.target = whisperTarget;
-
-        globalData.lobbyChat.push(newMsg);
-        if (globalData.lobbyChat.length > 50) globalData.lobbyChat.shift();
+        globalData.lobbyChat.push(msg);
+        if (globalData.lobbyChat.length > 100) globalData.lobbyChat.shift();
 
         await saveSpecificData('lobbyChat', globalData.lobbyChat);
         input.value = '';
+        renderLobbyChat();
     }
 
     async function createRoom() {
-        const roomId = prompt("생성할 방 이름을 입력하세요:");
-        if (!roomId) return;
+        const title = prompt("방 이름을 입력하세요:", `${currentUser.id}님의 방`);
+        if (!title) return;
 
-        await fetchSystemData();
-        if (globalData.rooms[roomId]) return alert("이미 존재하는 방 이름입니다.");
-
-        const boardSize = 8;
+        const roomId = 'room_' + Math.random().toString(36).substring(2, 9);
         const newRoom = {
             id: roomId,
-            hostId: currentUser.id,
-            boardSize: boardSize,
+            title: title,
+            host: currentUser.id,
+            boardSize: 8,
             status: 'waiting',
             players: {
-                [currentUser.id]: { id: currentUser.id, team: 'blue', isAi: false }
+                [currentUser.id]: { team: 'blue', joinedAt: Date.now() }
             },
-            board: createInitialBoard(boardSize),
+            board: null,
             turn: 'blue',
             chat: []
         };
 
-        const success = await saveSpecificData('rooms/' + roomId, newRoom);
-        if (!success) return alert("방 생성에 실패했습니다.");
-
-        currentRoomId = roomId;
-        localStorage.setItem('othello_session_room', roomId);
-        switchView('view-room');
-    }
-
-    async function joinRoom(roomId) {
-        await fetchSystemData();
-        const room = globalData.rooms[roomId];
-        if (!room) return alert("존재하지 않는 방입니다.");
-        if (!room.players) room.players = {};
-
-        if (currentUser.id === ADMIN_ID) {
-            room.hostId = ADMIN_ID;
-            await saveSpecificData(`rooms/${roomId}/hostId`, ADMIN_ID);
-        }
-
-        if (!room.players[currentUser.id]) {
-            let team = 'blue';
-            const blueCount = Object.values(room.players).filter(p => p.team === 'blue').length;
-            const redCount = Object.values(room.players).filter(p => p.team === 'red').length;
-            if (blueCount > redCount) team = 'red';
-
-            room.players[currentUser.id] = { id: currentUser.id, team: team, isAi: false };
-            await saveSpecificData(`rooms/${roomId}/players/${currentUser.id}`, room.players[currentUser.id]);
-        }
-
+        await saveSpecificData('rooms/' + roomId, newRoom);
         currentRoomId = roomId;
         localStorage.setItem('othello_session_room', roomId);
         renderRoomOrGameView();
     }
 
-    async function joinRoomAsSpectator(roomId) {
-        await fetchSystemData();
+    async function joinRoom(roomId) {
         const room = globalData.rooms[roomId];
         if (!room) return alert("존재하지 않는 방입니다.");
-        if (!room.players) room.players = {};
 
-        if (currentUser.id === ADMIN_ID) {
-            room.hostId = ADMIN_ID;
-            await saveSpecificData(`rooms/${roomId}/hostId`, ADMIN_ID);
+        if (!room.players) room.players = {};
+        if (!room.players[currentUser.id]) {
+            room.players[currentUser.id] = { team: 'spectator', joinedAt: Date.now() };
+            await saveSpecificData(`rooms/${roomId}/players`, room.players);
         }
 
-        room.players[currentUser.id] = { id: currentUser.id, team: 'spectator', isAi: false };
         currentRoomId = roomId;
         localStorage.setItem('othello_session_room', roomId);
-        await saveSpecificData(`rooms/${roomId}/players/${currentUser.id}`, room.players[currentUser.id]);
         renderRoomOrGameView();
     }
 
     async function leaveRoom() {
-        if (!currentRoomId || !currentUser) return;
+        if (!currentRoomId) return;
         const roomId = currentRoomId;
         const room = globalData.rooms[roomId];
 
-        if (room && room.players) {
+        if (room && room.players && room.players[currentUser.id]) {
             delete room.players[currentUser.id];
-            const humanRemaining = Object.entries(room.players).filter(([pId, pData]) => !pData.isAi);
-            if (humanRemaining.length === 0) {
+            if (Object.keys(room.players).length === 0) {
                 await removeSpecificData('rooms/' + roomId);
             } else {
-                if (room.hostId === currentUser.id) room.hostId = humanRemaining[0][0];
-                await saveSpecificData('rooms/' + roomId, room);
+                if (room.host === currentUser.id) {
+                    const remainingPlayerIds = Object.keys(room.players);
+                    room.host = remainingPlayerIds[0];
+                }
+                await saveSpecificData(`rooms/${roomId}`, room);
             }
         }
 
         currentRoomId = null;
         localStorage.removeItem('othello_session_room');
         switchView('view-lobby');
+        fetchSystemData();
     }
 
-    async function selectTeam(teamName) {
-        if (!currentRoomId || !currentUser) return;
-        const room = globalData.rooms[currentRoomId];
-        if (!room || !room.players[currentUser.id]) return;
-
-        room.players[currentUser.id].team = teamName;
-        await saveSpecificData(`rooms/${currentRoomId}/players/${currentUser.id}`, room.players[currentUser.id]);
-    }
-
-    function createInitialBoard(size) {
-        let board = Array(size).fill(null).map(() => Array(size).fill(null));
-        const mid = Math.floor(size / 2);
-        board[mid - 1][mid - 1] = 'red';
-        board[mid - 1][mid] = 'blue';
-        board[mid][mid - 1] = 'blue';
-        board[mid][mid] = 'red';
-        return board;
+    async function explodeRoom() {
+        if (!currentRoomId) return;
+        if (confirm("정말로 방을 폭파하시겠습니까?")) {
+            const roomId = currentRoomId;
+            currentRoomId = null;
+            localStorage.removeItem('othello_session_room');
+            await removeSpecificData('rooms/' + roomId);
+            switchView('view-lobby');
+            fetchSystemData();
+        }
     }
 
     function renderRoomOrGameView() {
         const room = globalData.rooms[currentRoomId];
         if (!room) return;
-        if (room.status === 'playing' || room.status === 'ended') {
-            switchView('view-game');
-            renderGameView(room);
-        } else {
+
+        const isHost = room.host === currentUser.id;
+        const isAdmin = currentUser.id === ADMIN_ID;
+
+        if (room.status === 'waiting') {
             switchView('view-room');
-            renderWaitingRoomView(room);
+            document.getElementById('display-room-id').innerText = room.title;
+
+            const explodeBtn = document.getElementById('btn-explode-room');
+            const hostControls = document.getElementById('room-host-controls');
+
+            if (isHost || isAdmin) {
+                explodeBtn.classList.remove('hidden');
+                hostControls.classList.remove('hidden');
+                document.getElementById('room-board-size').value = room.boardSize || 8;
+            } else {
+                explodeBtn.classList.add('hidden');
+                hostControls.classList.add('hidden');
+            }
+
+            renderTeamLists(room);
+        } else {
+            switchView('view-game');
+            const explodeBtnGame = document.getElementById('btn-explode-game');
+            if (isHost || isAdmin) {
+                explodeBtnGame.classList.remove('hidden');
+            } else {
+                explodeBtnGame.classList.add('hidden');
+            }
+            renderGame(room);
         }
     }
 
-    function renderWaitingRoomView(room) {
-        document.getElementById('display-room-id').innerText = room.id;
-        const isHost = (room.hostId === currentUser.id) || (currentUser.id === ADMIN_ID);
-        const isAdmin = currentUser.id === ADMIN_ID;
+    function renderTeamLists(room) {
+        const blueList = document.getElementById('room-list-blue');
+        const redList = document.getElementById('room-list-red');
+        const specList = document.getElementById('room-list-spectator');
 
-        if (isHost) document.getElementById('room-host-controls').classList.remove('hidden');
-        else document.getElementById('room-host-controls').classList.add('hidden');
+        let bHtml = '', rHtml = '', sHtml = '';
+        if (room.players) {
+            for (const [pId, pData] of Object.entries(room.players)) {
+                const name = getDisplayName(pId);
+                const item = `<li class="user-item"><span>${name} ${room.host === pId ? '👑' : ''}</span></li>`;
+                if (pData.team === 'blue') bHtml += item;
+                else if (pData.team === 'red') rHtml += item;
+                else sHtml += item;
+            }
+        }
+        blueList.innerHTML = bHtml || '<li style="color:#666; font-size:11px;">참가자 없음</li>';
+        redList.innerHTML = rHtml || '<li style="color:#666; font-size:11px;">참가자 없음</li>';
+        specList.innerHTML = sHtml || '<li style="color:#666; font-size:11px;">관전자 없음</li>';
+    }
 
-        if (isAdmin) document.getElementById('btn-explode-room').classList.remove('hidden');
-        else document.getElementById('btn-explode-room').classList.add('hidden');
+    async function selectTeam(team) {
+        if (!currentRoomId) return;
+        const room = globalData.rooms[currentRoomId];
+        if (!room || !room.players) return;
 
-        let blueHtml = '', redHtml = '', specHtml = '';
-        Object.values(room.players || {}).forEach(p => {
-            const displayName = p.isAi ? p.id : getDisplayName(p.id);
-            const item = `<li class="user-item"><span>${p.isAi ? '🤖 ' : ''}${displayName}</span></li>`;
-            if (p.team === 'blue') blueHtml += item;
-            else if (p.team === 'red') redHtml += item;
-            else specHtml += item;
-        });
-
-        document.getElementById('room-list-blue').innerHTML = blueHtml;
-        document.getElementById('room-list-red').innerHTML = redHtml;
-        document.getElementById('room-list-spectator').innerHTML = specHtml;
+        if (!room.players[currentUser.id]) {
+            room.players[currentUser.id] = {};
+        }
+        room.players[currentUser.id].team = team;
+        await saveSpecificData(`rooms/${currentRoomId}/players`, room.players);
+        renderTeamLists(room);
     }
 
     async function updateBoardSizeSetting(size) {
         if (!currentRoomId) return;
         const room = globalData.rooms[currentRoomId];
+        if (room.host !== currentUser.id && currentUser.id !== ADMIN_ID) return;
+
         room.boardSize = parseInt(size);
-        room.board = createInitialBoard(room.boardSize);
-        await saveSpecificData('rooms/' + currentRoomId, room);
+        await saveSpecificData(`rooms/${currentRoomId}/boardSize`, room.boardSize);
     }
 
     async function startGame() {
         if (!currentRoomId) return;
         const room = globalData.rooms[currentRoomId];
-        const players = Object.values(room.players || {});
-        if (!players.some(p => p.team === 'blue') || !players.some(p => p.team === 'red')) {
-            return alert("파란팀과 빨간팀에 최소 1명씩 있어야 합니다.");
-        }
-        room.status = 'playing';
-        room.board = createInitialBoard(room.boardSize || 8);
+        if (room.host !== currentUser.id && currentUser.id !== ADMIN_ID) return;
+
+        const size = room.boardSize || 8;
+        let board = Array(size).fill(null).map(() => Array(size).fill(null));
+
+        const mid = size / 2;
+        board[mid - 1][mid - 1] = 'red';
+        board[mid][mid] = 'red';
+        board[mid - 1][mid] = 'blue';
+        board[mid][mid - 1] = 'blue';
+
+        room.board = board;
         room.turn = 'blue';
-        hasPlayedConfetti = false;
-        await saveSpecificData('rooms/' + currentRoomId, room);
+        room.status = 'playing';
+
+        await saveSpecificData(`rooms/${currentRoomId}`, room);
     }
 
-    function renderGameView(room) {
-        const boardSize = room.boardSize || 8;
+    function renderGame(room) {
+        // [방어 코드 추가] board 데이터가 아직 동기화되지 않았거나 null인 경우 에러 방지
+        if (!room.board || !Array.isArray(room.board)) return;
+
+        const size = room.boardSize || 8;
         const boardEl = document.getElementById('othello-board');
-        boardEl.className = `othello-board size-${boardSize}`;
+        boardEl.className = `othello-board size-${size}`;
 
-        if (currentUser.id === ADMIN_ID) document.getElementById('btn-explode-game').classList.remove('hidden');
-        else document.getElementById('btn-explode-game').classList.add('hidden');
-
-        const isSpectator = room.players[currentUser.id]?.team === 'spectator';
-        const myTeam = room.players[currentUser.id]?.team;
-
-        let blueScore = 0, redScore = 0;
-        for (let r = 0; r < boardSize; r++) {
-            for (let c = 0; c < boardSize; c++) {
-                if (room.board[r][c] === 'blue') blueScore++;
-                if (room.board[r][c] === 'red') redScore++;
-            }
-        }
-        document.getElementById('score-blue').innerText = blueScore;
-        document.getElementById('score-red').innerText = redScore;
-
-        const turnBadge = document.getElementById('game-turn-badge');
-        if (room.status === 'ended') {
-            turnBadge.innerText = `🏆 게임 종료 - 승리: ${room.winner === 'blue' ? '🔵 파란팀' : (room.winner === 'red' ? '🔴 빨간팀' : '무승부')}`;
-            document.getElementById('btn-back-lobby').classList.remove('hidden');
-            if (!hasPlayedConfetti && room.winner) {
-                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-                hasPlayedConfetti = true;
-            }
-        } else {
-            document.getElementById('btn-back-lobby').classList.add('hidden');
-            turnBadge.innerText = `현재 턴: ${room.turn === 'blue' ? '🔵 파란팀' : '🔴 빨간팀'} ${isSpectator ? '(👁️ 관전 중)' : ''}`;
-        }
-
-        let validMoves = (!isSpectator && room.turn === myTeam && room.status === 'playing') ? getValidMoves(room.board, boardSize, myTeam) : [];
-
+        let bCount = 0, rCount = 0;
         let html = '';
-        for (let r = 0; r < boardSize; r++) {
-            for (let c = 0; c < boardSize; c++) {
-                const disc = room.board[r][c];
-                const isValid = validMoves.some(m => m.r === r && m.c === c);
-                html += `<div class="cell" onclick="handleCellClick(${r}, ${c})">`;
-                if (disc) html += `<div class="disc ${disc}"></div>`;
-                else if (isValid) html += `<div class="valid-hint"></div>`;
-                html += `</div>`;
+
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                const cell = room.board[r] ? room.board[r][c] : null;
+                if (cell === 'blue') bCount++;
+                if (cell === 'red') rCount++;
+
+                let discHtml = '';
+                if (cell === 'blue') discHtml = '<div class="disc blue"></div>';
+                else if (cell === 'red') discHtml = '<div class="disc red"></div>';
+
+                html += `<div class="cell" onclick="handleCellClick(${r}, ${c})">${discHtml}</div>`;
             }
         }
         boardEl.innerHTML = html;
-        renderGameChat(room);
+
+        document.getElementById('score-blue').innerText = bCount;
+        document.getElementById('score-red').innerText = rCount;
+
+        const turnBadge = document.getElementById('game-turn-badge');
+        turnBadge.innerText = room.turn === 'blue' ? "🔵 파란팀 차례" : "🔴 빨간팀 차례";
+
+        if (bCount + rCount === size * size || bCount === 0 || rCount === 0) {
+            turnBadge.innerText = bCount > rCount ? "🎉 파란팀 승리!" : (rCount > bCount ? "🎉 빨간팀 승리!" : "🤝 무승부!");
+            document.getElementById('btn-back-lobby').classList.remove('hidden');
+
+            if (!hasPlayedConfetti) {
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                hasPlayedConfetti = true;
+            }
+        }
     }
 
     async function handleCellClick(r, c) {
-        if (!currentRoomId || !currentUser) return;
-        const room = globalData.rooms[currentRoomId];
-        if (!room || room.status !== 'playing') return;
-        const myTeam = room.players[currentUser.id]?.team;
-        if (myTeam !== room.turn) return;
-
-        const boardSize = room.boardSize || 8;
-        const flips = getFlips(room.board, boardSize, r, c, myTeam);
-        if (flips.length === 0) return;
-
-        room.board[r][c] = myTeam;
-        flips.forEach(f => { room.board[f.r][f.c] = myTeam; });
-
-        const nextTeam = myTeam === 'blue' ? 'red' : 'blue';
-        const nextMoves = getValidMoves(room.board, boardSize, nextTeam);
-
-        if (nextMoves.length > 0) {
-            room.turn = nextTeam;
-        } else {
-            if (getValidMoves(room.board, boardSize, myTeam).length === 0) {
-                room.status = 'ended';
-                const { blue, red } = countDiscs(room.board, boardSize);
-                if (blue > red) room.winner = 'blue';
-                else if (red > blue) room.winner = 'red';
-                else room.winner = 'draw';
-                await updatePlayerWins(room);
-            }
-        }
-        await saveSpecificData('rooms/' + currentRoomId, room);
-    }
-
-    async function updatePlayerWins(room) {
-        if (!room.winner || room.winner === 'draw') return;
-        for (const [pId, pData] of Object.entries(room.players)) {
-            if (pData.team === room.winner && !pData.isAi && pId !== ADMIN_ID) {
-                const user = globalData.users[pId];
-                if (user) {
-                    user.score = (user.score || 0) + 1;
-                    await saveSpecificData(`users/${pId}/score`, user.score);
-                }
-            }
-        }
-    }
-
-    function countDiscs(board, size) {
-        let blue = 0, red = 0;
-        for (let r = 0; r < size; r++) {
-            for (let c = 0; c < size; c++) {
-                if (board[r][c] === 'blue') blue++;
-                if (board[r][c] === 'red') red++;
-            }
-        }
-        return { blue, red };
-    }
-
-    function getValidMoves(board, size, team) {
-        let moves = [];
-        for (let r = 0; r < size; r++) {
-            for (let c = 0; c < size; c++) {
-                if (!board[r][c] && getFlips(board, size, r, c, team).length > 0) moves.push({ r, c });
-            }
-        }
-        return moves;
-    }
-
-    function getFlips(board, size, r, c, team) {
-        if (board[r][c]) return [];
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-        const opponent = team === 'blue' ? 'red' : 'blue';
-        let totalFlips = [];
-
-        directions.forEach(([dr, dc]) => {
-            let nr = r + dr, nc = c + dc;
-            let tempFlips = [];
-            while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === opponent) {
-                tempFlips.push({ r: nr, c: nc });
-                nr += dr; nc += dc;
-            }
-            if (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === team) {
-                totalFlips = totalFlips.concat(tempFlips);
-            }
-        });
-        return totalFlips;
-    }
-
-    function renderGameChat(room) {
-        const chatBox = document.getElementById('game-chat-msgs');
-        let html = '';
-        (room.chat || []).forEach(msg => {
-            html += `<div class="chat-msg"><span class="sender">${getDisplayName(msg.sender)}</span>: ${msg.text}</div>`;
-        });
-        chatBox.innerHTML = html;
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    async function sendGameChat() {
-        const input = document.getElementById('game-chat-input');
-        const text = input.value.trim();
-        if (!text || !currentRoomId || !currentUser) return;
-        const room = globalData.rooms[currentRoomId];
-        if (!room.chat) room.chat = [];
-        room.chat.push({ sender: currentUser.id, text: text, timestamp: Date.now() });
-        await saveSpecificData(`rooms/${currentRoomId}/chat`, room.chat);
-        input.value = '';
-    }
-
-    function returnToLobby() { leaveRoom(); }
-
-    async function explodeRoom() {
-        if (!currentUser || currentUser.id !== ADMIN_ID) return;
         if (!currentRoomId) return;
-        if (confirm("정말로 이 방을 폭파하시겠습니까?")) {
-            const rId = currentRoomId;
-            currentRoomId = null;
-            localStorage.removeItem('othello_session_room');
-            await removeSpecificData('rooms/' + rId);
-            switchView('view-lobby');
+        const room = globalData.rooms[currentRoomId];
+        if (!room || room.status !== 'playing' || !room.board) return;
+
+        const myPlayerInfo = room.players[currentUser.id];
+        if (!myPlayerInfo || myPlayerInfo.team !== room.turn) {
+            return; 
         }
+
+        const size = room.boardSize || 8;
+        if (room.board[r][c] !== null) return;
+
+        const flipped = getFlippedDiscs(room.board, r, c, room.turn, size);
+        if (flipped.length === 0) return; 
+
+        room.board[r][c] = room.turn;
+        flipped.forEach(([fr, fc]) => {
+            room.board[fr][fc] = room.turn;
+        });
+
+        room.turn = room.turn === 'blue' ? 'red' : 'blue';
+
+        await saveSpecificData(`rooms/${currentRoomId}/board`, room.board);
+        await saveSpecificData(`rooms/${currentRoomId}/turn`, room.turn);
+        renderGame(room);
     }
+
+    function getFlippedDiscs(board, r, c, turn, size) {
+        const opponent = turn === 'blue' ? 'red' : 'blue';
+        const directions = [
+            [-1, 0], [1, 0], [0, -1], [0, 1],
+            [-1, -1], [-1, 1], [1, -1], [1, 1]
+        ];
+        let totalFlipped = [];
+
+        for (const [dr, dc] of directions) {
+            let tempFlipped = [];
+            let currR = r + dr;
+            let currC = c + dc;
+
+            while (currR >= 0 && currR < size && currC >= 0 && currC < size) {
+                const val = board[currR] ? board[currR][currC] : null;
+                if (val === opponent) {
+                    tempFlipped.push([currR, currC]);
+                } else if (val === turn) {
+                    if (tempFlipped.length > 0) {
+                        totalFlipped = totalFlipped.concat(tempFlipped);
+                    }
+                    break;
+                } else {
+                    break;
+                }
+                currR += dr;
+                currC += dc;
+            }
+        }
+        return totalFlipped;
+    }
+
+    async function returnToLobby() {
+        if (!currentRoomId) return;
+        await removeSpecificData('rooms/' + currentRoomId);
+        currentRoomId = null;
+        localStorage.removeItem('othello_session_room');
+        hasPlayedConfetti = false;
+        switchView('view-lobby');
+        fetchSystemData();
+    }
+
+    function sendGameChat() {}
 </script>
 </body>
 </html>
