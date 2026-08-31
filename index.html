@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.17 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.18 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.17 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.18 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.17 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.18 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -295,7 +295,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.17.html';
+        a.download = 'othello_v2.18.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -314,7 +314,7 @@
         return userId;
     }
 
-    // [v2.17] 게임판 상태의 단조 증가 버전.
+    // [v2.18] 게임판 상태의 단조 증가 버전.
     // Firebase의 오래된 GET 응답이 현재 게임 상태를 덮어쓰지 못하게 한다.
     function getStateVersion(room) {
         const v = Number(room?.stateVersion);
@@ -436,7 +436,7 @@
 
         // 게임 중인 방은 전체 Firebase 데이터를 다시 받아오지 않고
         // 해당 방 하나만 별도로 동기화한다.
-        roomStateSyncInterval = setInterval(syncCurrentRoom, 500);
+        roomStateSyncInterval = setInterval(syncCurrentRoom, 1000);
     }
 
     async function syncCurrentRoom() {
@@ -452,10 +452,13 @@
             // 착수/타임아웃이 요청 중간에 발생했다면 이 응답은 폐기한다.
             if (generationAtStart !== roomSyncGeneration) return;
 
-            // 현재 방의 실제 Firebase 상태만 화면에 반영한다.
-            // 전체 데이터 GET 결과로 게임판을 덮어쓰지 않는다.
-            globalData.rooms[roomId] = room;
-            renderRoomOrGameView();
+            // 실제 상태가 바뀐 경우에만 다시 렌더링한다.
+            // 불필요한 재렌더링으로 클릭 직후 UI가 흔들리는 것을 방지한다.
+            const current = globalData.rooms[roomId];
+            if (JSON.stringify(current) !== JSON.stringify(room)) {
+                globalData.rooms[roomId] = room;
+                renderRoomOrGameView();
+            }
         } catch (e) {}
     }
 
@@ -474,7 +477,7 @@
                     globalData.users = data.users || {};
                     const incomingRooms = data.rooms || {};
 
-                    // [v2.17 핵심]
+                    // [v2.18 핵심]
                     // 게임 중인 방은 전체 DB polling의 대상에서 제외한다.
                     // 전체 /rooms GET은 다른 방/로비 데이터만 갱신하고,
                     // 현재 게임방은 syncCurrentRoom()이 방 단위로 담당한다.
@@ -576,7 +579,7 @@
         } catch (e) {}
     }
 
-    // [v2.17 핵심] 게임방은 전체 상태 PUT 시 ETag 조건부 저장을 사용한다.
+    // [v2.18 핵심] 게임방은 전체 상태 PUT 시 ETag 조건부 저장을 사용한다.
     // 두 컴퓨터가 동시에 같은 오래된 방 데이터를 저장해서 서로의 착수를
     // 덮어쓰는 것을 Firebase 레벨에서 차단한다.
     async function fetchRoomWithETag(roomId) {
@@ -1084,7 +1087,7 @@
             // 착수 중인 전체 방 저장을 덮어쓰는 경쟁 상태를 만들지 않는다.
         }
 
-        // [v2.17] 기존 방에 상태 버전이 없으면 0으로 취급한다.
+        // [v2.18] 기존 방에 상태 버전이 없으면 0으로 취급한다.
         // 여기서는 Firebase에 별도 저장하지 않아 렌더링 자체가 게임 상태를 덮어쓰지 않는다.
         if (!Number.isFinite(Number(room.stateVersion))) {
             room.stateVersion = 0;
@@ -1182,7 +1185,7 @@
         roomWriteInProgress = true;
 
         try {
-            // [v2.17] 타임아웃도 반드시 Firebase 최신 상태 + ETag를 기준으로 처리한다.
+            // [v2.18] 타임아웃도 반드시 Firebase 최신 상태 + ETag를 기준으로 처리한다.
             // 두 컴퓨터에서 동시에 30초가 되어도 한 쪽만 조건부 PUT에 성공한다.
             const fresh = await fetchRoomWithETag(roomId);
             if (!fresh || !fresh.room) return;
@@ -1268,85 +1271,96 @@
         if (!currentRoomId || !currentUser || timeoutProcessing || roomWriteInProgress) return;
 
         const roomId = currentRoomId;
-        roomSyncGeneration++;
+        const localRoom = globalData.rooms[roomId];
+        if (!localRoom || localRoom.status !== 'playing') return;
+
+        const myTeam = localRoom.players?.[currentUser.id]?.team;
+        if (myTeam !== localRoom.turn || (myTeam !== 'blue' && myTeam !== 'red')) return;
+
+        const size = localRoom.boardSize || 8;
+        if (!Array.isArray(localRoom.board) ||
+            localRoom.board.length !== size ||
+            !localRoom.board.every(row => Array.isArray(row) && row.length === size)) return;
+
+        const flips = getFlips(localRoom.board, size, r, c, myTeam);
+        if (!flips.length) return;
+
+        /*
+         * [v2.18]
+         * 클릭 자체는 로컬 상태에서 즉시 처리한다.
+         * v2.15~2.17에서 클릭마다 Firebase GET을 먼저 기다리면서
+         * 클릭 이벤트와 동기화가 서로 막히는 문제가 생길 수 있었다.
+         *
+         * 그 대신 저장할 때 ETag 조건부 PUT을 사용하여,
+         * 상대방이 먼저 바꾼 상태를 덮어쓰지 않는다.
+         */
         roomWriteInProgress = true;
+        roomSyncGeneration++;
 
         try {
-            const fresh = await fetchRoomWithETag(roomId);
-            if (!fresh || !fresh.room || currentRoomId !== roomId) return;
+            const nextRoom = JSON.parse(JSON.stringify(localRoom));
 
-            const room = fresh.room;
-            if (room.status !== 'playing') return;
+            nextRoom.board[r][c] = myTeam;
+            flips.forEach(f => { nextRoom.board[f.r][f.c] = myTeam; });
 
-            const myTeam = room.players?.[currentUser.id]?.team;
-            if (myTeam !== room.turn || (myTeam !== 'blue' && myTeam !== 'red')) {
-                globalData.rooms[roomId] = room;
-                renderGameView(room);
-                return;
-            }
+            const nextTeam = myTeam === 'blue' ? 'red' : 'blue';
+            const nextMoves = getValidMoves(nextRoom.board, size, nextTeam);
 
-            const size = room.boardSize || 8;
-            if (!Array.isArray(room.board) ||
-                room.board.length !== size ||
-                !room.board.every(row => Array.isArray(row) && row.length === size)) {
-                return;
-            }
-
-            if (room.turnStartedAt && Date.now() - Number(room.turnStartedAt) >= 30000) {
-                // 최신 방을 이미 확보했으므로 타임아웃을 같은 최신 상태에서 처리한다.
-                const moves = getValidMoves(room.board, size, myTeam);
-                if (moves.length) {
-                    const move = moves[Math.floor(Math.random() * moves.length)];
-                    const flips = getFlips(room.board, size, move.r, move.c, myTeam);
-                    room.board[move.r][move.c] = myTeam;
-                    flips.forEach(f => room.board[f.r][f.c] = myTeam);
-                }
-                const next = myTeam === 'blue' ? 'red' : 'blue';
-                if (getValidMoves(room.board, size, next).length) {
-                    room.turn = next;
-                    room.turnStartedAt = Date.now();
-                } else if (getValidMoves(room.board, size, myTeam).length) {
-                    room.turn = myTeam;
-                    room.turnStartedAt = Date.now();
-                } else {
-                    room.status = 'ended';
-                    const score = countDiscs(room.board, size);
-                    room.winner = score.blue > score.red ? 'blue' : (score.red > score.blue ? 'red' : 'draw');
-                }
+            if (nextMoves.length > 0) {
+                nextRoom.turn = nextTeam;
+                nextRoom.turnStartedAt = Date.now();
             } else {
-                const flips = getFlips(room.board, size, r, c, myTeam);
-                if (!flips.length) {
-                    globalData.rooms[roomId] = room;
-                    renderGameView(room);
-                    return;
-                }
+                const currentMoves = getValidMoves(nextRoom.board, size, myTeam);
 
-                room.board[r][c] = myTeam;
-                flips.forEach(f => room.board[f.r][f.c] = myTeam);
-
-                const next = myTeam === 'blue' ? 'red' : 'blue';
-                if (getValidMoves(room.board, size, next).length) {
-                    room.turn = next;
-                    room.turnStartedAt = Date.now();
-                } else if (getValidMoves(room.board, size, myTeam).length) {
-                    room.turn = myTeam;
-                    room.turnStartedAt = Date.now();
+                if (currentMoves.length > 0) {
+                    nextRoom.turn = myTeam;
+                    nextRoom.turnStartedAt = Date.now();
                 } else {
-                    room.status = 'ended';
-                    const score = countDiscs(room.board, size);
-                    room.winner = score.blue > score.red ? 'blue' : (score.red > score.blue ? 'red' : 'draw');
+                    nextRoom.status = 'ended';
+                    const score = countDiscs(nextRoom.board, size);
+                    nextRoom.winner =
+                        score.blue > score.red ? 'blue' :
+                        score.red > score.blue ? 'red' : 'draw';
+                    nextRoom.resultRecorded = false;
                 }
             }
 
-            room.stateVersion = getStateVersion(room) + 1;
+            nextRoom.stateVersion = getStateVersion(nextRoom) + 1;
 
-            // 로컬 즉시 반영
-            globalData.rooms[roomId] = room;
-            renderGameView(room);
+            // 클릭 즉시 화면에 반영
+            globalData.rooms[roomId] = nextRoom;
+            renderGameView(nextRoom);
 
-            // ETag가 바뀌었다면 상대 컴퓨터가 먼저 저장한 것.
-            // 절대로 그 상태를 덮어쓰지 않고 Firebase 최신 상태를 다시 받는다.
-            const saved = await saveRoomWithETag(roomId, room, fresh.etag);
+            // 저장 직전에 Firebase의 ETag를 확보한다.
+            const fresh = await fetchRoomWithETag(roomId);
+
+            if (!fresh || !fresh.room) {
+                // 네트워크 오류면 로컬 변경을 유지하지 않고 최신 상태로 복구
+                const latest = await fetchFreshRoom(roomId);
+                if (latest) {
+                    globalData.rooms[roomId] = latest;
+                    renderGameView(latest);
+                }
+                return;
+            }
+
+            // 내가 클릭한 순간부터 Firebase 상태가 바뀌었다면
+            // 로컬 보드와 Firebase 보드를 비교해 충돌을 판단한다.
+            const serverRoom = fresh.room;
+            const localBeforeMove = JSON.stringify(localRoom.board);
+            const serverBoard = JSON.stringify(serverRoom.board);
+
+            // 서버 상태가 이미 로컬 상태와 다르면 상대방이 먼저 착수한 것.
+            // 내 수를 덮어쓰지 않고 서버 최신 상태를 보여준다.
+            if (serverBoard !== localBeforeMove ||
+                serverRoom.turn !== localRoom.turn ||
+                serverRoom.status !== localRoom.status) {
+                globalData.rooms[roomId] = serverRoom;
+                renderGameView(serverRoom);
+                return;
+            }
+
+            const saved = await saveRoomWithETag(roomId, nextRoom, fresh.etag);
 
             if (!saved.ok) {
                 const latest = await fetchFreshRoom(roomId);
@@ -1357,16 +1371,12 @@
                 return;
             }
 
-            globalData.rooms[roomId] = room;
+            globalData.rooms[roomId] = nextRoom;
 
-            // 저장 성공. 이후에는 방 전용 syncCurrentRoom()이
-            // Firebase의 확정 상태를 계속 받아온다.
-            // 전체 DB fetchSystemData()를 여기서 호출하지 않는다.
-
-            if (room.status === 'ended' && room.winner && !room.resultRecorded) {
-                room.resultRecorded = true;
+            if (nextRoom.status === 'ended' && nextRoom.winner && !nextRoom.resultRecorded) {
+                nextRoom.resultRecorded = true;
                 await saveSpecificData(`rooms/${roomId}/resultRecorded`, true);
-                await updatePlayerWins(room);
+                await updatePlayerWins(nextRoom);
             }
         } finally {
             roomWriteInProgress = false;
