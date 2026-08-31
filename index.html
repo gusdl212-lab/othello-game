@@ -37,8 +37,9 @@
         .stone.blue { background: radial-gradient(circle at 30% 30%, #4facfe, #003366); }
         .stone.red { background: radial-gradient(circle at 30% 30%, #ff4b2b, #8A2387); }
         .hidden { display: none !important; }
-        .score-board { display: flex; justify-content: space-around; margin-bottom: 10px; background: #121821; padding: 10px; border-radius: 8px; }
-        .score-box { text-align: center; font-size: 18px; font-weight: bold; }
+        .score-board { display: flex; justify-content: space-around; margin-bottom: 10px; background: #121821; padding: 10px; border-radius: 8px; align-items: center; }
+        .score-box { text-align: center; font-size: 16px; font-weight: bold; }
+        .timer-box { background: #1f2833; padding: 5px 10px; border-radius: 6px; border: 1px solid #45a29e; color: #66fcf1; font-size: 14px; font-weight: bold; }
         .game-chat-panel { background: #121821; border-radius: 8px; border: 1px solid #2d3748; display: flex; flex-direction: column; height: 500px; padding: 10px; }
         .game-chat-msgs { flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 12px; }
         .admin-only { display: none; }
@@ -135,7 +136,6 @@
             </div>
         </div>
         
-        <!-- 방 안에서 맵 사이즈 변경 (방장만 변경 가능) -->
         <div style="margin-top: 12px; background: #121821; padding: 10px 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #2d3748;">
             <span style="font-size: 13px; color: #66fcf1;">🗺️ 게임 맵 크기 설정:</span>
             <select id="room-size-select" style="width: 140px; margin: 0; padding: 6px;" onchange="changeRoomSize(this.value)">
@@ -148,14 +148,14 @@
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px;">
             <div style="background:#121821; padding:15px; border-radius:8px; border-top:4px solid #4facfe;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>🔵 파란돌 (선공)</span>
+                    <span>🔵 파란돌 (선공 후보)</span>
                     <button class="btn-blue" style="width:auto; padding:4px 10px;" onclick="joinTeam(1)">참가</button>
                 </div>
                 <div id="team-black" style="margin-top:10px; font-size:12px;"></div>
             </div>
             <div style="background:#121821; padding:15px; border-radius:8px; border-top:4px solid #ff4b2b;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>🔴 빨간돌 (후공)</span>
+                    <span>🔴 빨간돌 (후공 후보)</span>
                     <button class="btn-red" style="width:auto; padding:4px 10px;" onclick="joinTeam(2)">참가</button>
                 </div>
                 <div id="team-white" style="margin-top:10px; font-size:12px;"></div>
@@ -187,6 +187,7 @@
                 <div class="score-board">
                     <div class="score-box" style="color:#4facfe;">🔵 파랑: <span id="score-black">2</span></div>
                     <div id="turn-indicator" class="score-box" style="color:#66fcf1;">파란돌 턴</div>
+                    <div class="timer-box">⏳ <span id="timer-count">30</span>초</div>
                     <div class="score-box" style="color:#ff4b2b;">🔴 빨강: <span id="score-white">2</span></div>
                 </div>
                 <div class="board-wrapper">
@@ -214,6 +215,8 @@
     let syncTimer = null;
     let localData = { users: {}, rooms: {}, chats: [] };
     let tempFoundUserId = null;
+    let localTimerSec = 30;
+    let clientTimerInterval = null;
 
     async function api(path, method="GET", body=null) {
         let options = { method };
@@ -258,6 +261,11 @@
         });
         document.getElementById(viewId).classList.remove('hidden');
         
+        if (viewId !== 'view-game' && clientTimerInterval) {
+            clearInterval(clientTimerInterval);
+            clientTimerInterval = null;
+        }
+
         if (user && user.id === ADMIN_ID) {
             document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'inline-block');
         }
@@ -324,6 +332,7 @@
 
     function logout() {
         clearInterval(syncTimer);
+        if (clientTimerInterval) clearInterval(clientTimerInterval);
         user = null; currentRoomId = null;
         switchView('view-auth');
     }
@@ -357,31 +366,27 @@
         switchView('view-lobby');
     }
 
-    // 1. 방 제목을 입력받아 생성하도록 수정
     async function openCreateRoomModal() {
         let displayName = (user.id === ADMIN_ID) ? "관리자" : user.id;
         let defaultTitle = `${displayName}님의 오셀로 대결방`;
         let roomTitle = prompt("생성할 방의 제목을 입력하세요:", defaultTitle);
-        if (!roomTitle) return; // 취소 시 중단
+        if (!roomTitle) return;
 
         let roomId = "room_" + Date.now();
-        let room = { id: roomId, title: roomTitle, size: 8, hostId: user.id, status: 'wait', players: {}, board: [], turn: 1, p1Score: 2, p2Score: 2 };
+        let room = { id: roomId, title: roomTitle, size: 8, hostId: user.id, status: 'wait', players: {}, board: [], turn: 1, p1Score: 2, p2Score: 2, turnStartTime: 0 };
         room.players[user.id] = { id: user.id, team: 1 };
         await api(`rooms/${roomId}`, "PUT", room);
         currentRoomId = roomId;
         switchView('view-room');
     }
 
-    // 2. 대기실에서 맵 사이즈 변경 함수
     async function changeRoomSize(newSize) {
         if (!currentRoomId) return;
         let room = localData.rooms[currentRoomId];
         if (!room) return;
         
-        // 방장 권한 체크
         if (room.hostId !== user.id && user.id !== ADMIN_ID) {
             alert("방장만 맵 크기를 변경할 수 있습니다.");
-            // UI 원복
             document.getElementById('room-size-select').value = room.size;
             return;
         }
@@ -471,7 +476,9 @@
         
         room.board = board;
         room.status = 'playing';
-        room.turn = 1;
+        // 팀 무작위 시작 (1 또는 2)
+        room.turn = Math.random() < 0.5 ? 1 : 2;
+        room.turnStartTime = Date.now();
         await api(`rooms/${currentRoomId}`, "PUT", room);
     }
 
@@ -524,14 +531,50 @@
 
         room.p1Score = room.board.filter(c => c === 1).length;
         room.p2Score = room.board.filter(c => c === 2).length;
+        room.turnStartTime = Date.now(); // 턴 넘어가거나 둘 때 타이머 초기화
         
+        await api(`rooms/${currentRoomId}`, "PUT", room);
+    }
+
+    // 시간 초과 시 무작위 돌 배치 후 턴 넘김 수행 (방장 혹은 먼저 감지한 사람이 처리)
+    async function handleTimeout() {
+        if (!currentRoomId) return;
+        let room = localData.rooms[currentRoomId];
+        if (!room || room.status !== 'playing') return;
+
+        // 유효한 착수 위치 모두 찾기
+        let validMoves = [];
+        for (let i = 0; i < room.size * room.size; i++) {
+            if (getFlippable(room.board, room.size, i, room.turn).length > 0) {
+                validMoves.push(i);
+            }
+        }
+
+        if (validMoves.length > 0) {
+            let randIdx = validMoves[Math.floor(Math.random() * validMoves.length)];
+            let flips = getFlippable(room.board, room.size, randIdx, room.turn);
+            
+            room.board[randIdx] = room.turn;
+            flips.forEach(i => room.board[i] = room.turn);
+        }
+
+        let opp = room.turn === 1 ? 2 : 1;
+        if (hasValidMove(room.board, room.size, opp)) {
+            room.turn = opp;
+        } else if (validMoves.length === 0) {
+            room.status = 'wait';
+        }
+
+        room.p1Score = room.board.filter(c => c === 1).length;
+        room.p2Score = room.board.filter(c => c === 2).length;
+        room.turnStartTime = Date.now();
+
         await api(`rooms/${currentRoomId}`, "PUT", room);
     }
 
     function updateUI() {
         if (!user) return;
         
-        // 로비 업데이트
         if (document.getElementById('view-lobby').className.indexOf('hidden') === -1) {
             let userHtml = '', rankHtml = '';
             let sortedUsers = Object.values(localData.users).sort((a,b) => (b.score || 0) - (a.score || 0));
@@ -580,14 +623,12 @@
             document.getElementById('lobby-chat-msgs').innerHTML = chatHtml;
         }
 
-        // 방 & 게임 화면 업데이트
         if (currentRoomId && localData.rooms[currentRoomId]) {
             let room = localData.rooms[currentRoomId];
             if (room.status === 'wait') {
                 if (document.getElementById('view-room').className.indexOf('hidden') !== -1) switchView('view-room');
                 document.getElementById('room-title').innerText = room.title;
                 
-                // 대기실 셀렉트 박스 동기화
                 let sizeSelect = document.getElementById('room-size-select');
                 if (document.activeElement !== sizeSelect) {
                     sizeSelect.value = room.size;
@@ -605,12 +646,38 @@
                 
                 document.getElementById('host-controls').style.display = (room.hostId === user.id) ? 'block' : 'none';
             } else {
-                if (document.getElementById('view-game').className.indexOf('hidden') !== -1) switchView('view-game');
+                if (document.getElementById('view-game').className.indexOf('hidden') !== -1) {
+                    switchView('view-game');
+                }
                 
                 document.getElementById('score-black').innerText = room.p1Score || 0;
                 document.getElementById('score-white').innerText = room.p2Score || 0;
                 document.getElementById('game-size-label').innerText = `${room.size}x${room.size}`;
                 document.getElementById('turn-indicator').innerText = room.turn === 1 ? '🔵 파란돌 턴' : '🔴 빨간돌 턴';
+                
+                // 30초 타이머 클라이언트 표시 계산
+                let elapsed = Math.floor((Date.now() - (room.turnStartTime || Date.now())) / 1000);
+                let leftSec = Math.max(0, 30 - elapsed);
+                document.getElementById('timer-count').innerText = leftSec;
+
+                // 타이머 인터벌 설정 (방장 또는 현재 턴 사용자가 시간 초과 시 자동 처리 트리거)
+                if (!clientTimerInterval) {
+                    clientTimerInterval = setInterval(() => {
+                        let curRoom = localData.rooms[currentRoomId];
+                        if (!curRoom || curRoom.status !== 'playing') return;
+                        let secPassed = Math.floor((Date.now() - (curRoom.turnStartTime || Date.now())) / 1000);
+                        let rem = Math.max(0, 30 - secPassed);
+                        let timerEl = document.getElementById('timer-count');
+                        if (timerEl) timerEl.innerText = rem;
+
+                        // 시간이 다 되고 내가 방장이거나 내 턴일 경우 타임아웃 실행을 주도
+                        if (rem === 0) {
+                            if (curRoom.hostId === user.id || curRoom.players[user.id]?.team === curRoom.turn) {
+                                handleTimeout();
+                            }
+                        }
+                    }, 1000);
+                }
                 
                 let boardEl = document.getElementById('othello-board');
                 boardEl.style.gridTemplateColumns = `repeat(${room.size}, 1fr)`;
