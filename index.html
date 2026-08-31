@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.12 - 완전 통합 버전)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.6 - 랭킹 관리자 이름 수정)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -11,13 +11,16 @@
             margin: 0; padding: 15px; background: #0b0c10; color: #e0e6ed;
             display: flex; justify-content: center; align-items: center; min-height: 100vh;
         }
+
         .container {
             width: 100%; max-width: 900px; background: #1f2833; border-radius: 16px;
             padding: 20px; box-shadow: 0 0 30px rgba(0, 255, 204, 0.1); border: 1px solid #45a29e;
             position: relative;
         }
+
         h1 { text-align: center; color: #66fcf1; margin-top: 0; margin-bottom: 5px; font-size: 24px; }
         .status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #4eacc5; margin-bottom: 15px; background: #121821; padding: 6px 12px; border-radius: 6px; border: 1px solid #2d3748; }
+
         .card { background: #0b0c10; border-radius: 12px; padding: 20px; margin-bottom: 15px; border: 1px solid #2d3748; }
         input[type="text"], input[type="password"], select {
             width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #45a29e;
@@ -36,11 +39,11 @@
         .btn-main { background: #66fcf1; color: #0b0c10; font-size: 14px; font-weight: 800; }
         .btn-main:hover { background: #45a29e; }
         .btn-danger { background: #e53e3e; color: #fff; padding: 5px 10px; font-size: 11px; width: auto; }
-        .btn-admin-action { background: #9b2c2c; color: #fff; padding: 2px 6px; font-size: 10px; width: auto; border-radius: 4px; cursor: pointer; }
-        .btn-admin-action:hover { background: #c53030; }
+        .btn-ai { background: #d69e2e; color: #fff; }
+        .btn-ai:hover { background: #b7791f; }
         .btn-explode { background: #e53e3e; color: #fff; }
 
-        .lobby-grid { display: grid; grid-template-columns: 280px 1fr 240px; gap: 15px; }
+        .lobby-grid { display: grid; grid-template-columns: 260px 1fr 240px; gap: 15px; }
         .panel { background: #121821; border-radius: 10px; padding: 12px; border: 1px solid #2d3748; height: 460px; overflow-y: auto; }
         .panel h3 { font-size: 14px; color: #66fcf1; margin-top: 0; border-bottom: 1px solid #2d3748; padding-bottom: 8px; }
 
@@ -48,11 +51,11 @@
         .rank-admin { color: #ffd700; font-weight: bold; }
 
         .user-list, .chat-messages { list-style: none; padding: 0; margin: 0; font-size: 12px; }
-        .user-item { display: flex; justify-content: space-between; align-items: center; padding: 6px; background: #1f2833; margin-bottom: 4px; border-radius: 4px; cursor: pointer; }
+        .user-item { display: flex; justify-content: space-between; align-items: center; padding: 6px; background: #1f2833; margin-bottom: 4px; border-radius: 4px; }
         .user-item:hover { background: #283342; }
         
         .chat-msg { margin-bottom: 6px; word-break: break-all; }
-        .chat-msg span.sender { color: #66fcf1; font-weight: bold; cursor: pointer; }
+        .chat-msg span.sender { color: #66fcf1; font-weight: bold; }
         .chat-msg.whisper { color: #f6ad55; background: rgba(246, 173, 85, 0.1); padding: 4px 6px; border-radius: 4px; border-left: 3px solid #f6ad55; }
 
         .room-list-box { max-height: 380px; overflow-y: auto; }
@@ -83,11 +86,22 @@
         .valid-hint { width: 25%; height: 25%; border-radius: 50%; background: rgba(255, 255, 255, 0.5); }
 
         .hidden { display: none !important; }
+
         .game-chat-panel { background: #121821; border-radius: 8px; border: 1px solid #2d3748; display: flex; flex-direction: column; height: 420px; padding: 10px; }
         .game-chat-msgs { flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 12px; }
         .auth-box { max-width: 380px; margin: 0 auto; }
-        .checkbox-group { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #a0aec0; margin-bottom: 12px; }
+        
+        .checkbox-group {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 12px; color: #a0aec0; margin-bottom: 12px;
+        }
         .checkbox-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+        #pause-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 12, 16, 0.85); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 10; border-radius: 10px;
+        }
     </style>
 </head>
 <body style="visibility: hidden;">
@@ -95,8 +109,8 @@
 <div class="container">
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
-        <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.12 (통합 안정화 패치)</span>
+        <span>🌐 파이어베이스 실시간 영구 연동 모드</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.6 (랭킹 관리자 표시 수정)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -123,7 +137,10 @@
             <input type="text" id="signup-id" placeholder="사용할 아이디" maxlength="20" onkeypress="if(event.key==='Enter') handleSignup()">
             <input type="password" id="signup-pw" placeholder="비밀번호" maxlength="20" onkeypress="if(event.key==='Enter') handleSignup()">
             <input type="password" id="signup-pw-confirm" placeholder="비밀번호 확인" maxlength="20" onkeypress="if(event.key==='Enter') handleSignup()">
+            
+            <div style="margin-bottom:4px; font-size:11px; color:#66fcf1;">💡 이메일 (@korea.kr) - 아이디/비밀번호 찾기 용도</div>
             <input type="text" id="signup-email" placeholder="이메일 입력 (@korea.kr 필수)" maxlength="40" onkeypress="if(event.key==='Enter') handleSignup()">
+            
             <button class="btn-main" onclick="handleSignup()">가입 완료 ✨</button>
             <div style="text-align:center; font-size:12px; margin-top:10px;">
                 <span style="color:#aaa; cursor:pointer;" onclick="switchAuthMode('login')">돌아가기</span>
@@ -132,9 +149,9 @@
 
         <div id="form-forgot" class="hidden">
             <h3 style="text-align:center; color:#66fcf1;">🔑 비밀번호 찾기</h3>
-            <input type="text" id="forgot-id" placeholder="아이디 입력" maxlength="20">
-            <input type="text" id="forgot-email" placeholder="가입한 이메일 (@korea.kr)" maxlength="40">
-            <input type="password" id="forgot-newpw" placeholder="새 비밀번호 입력" maxlength="20">
+            <input type="text" id="forgot-id" placeholder="아이디 입력" maxlength="20" onkeypress="if(event.key==='Enter') handlePasswordReset()">
+            <input type="text" id="forgot-email" placeholder="가입한 이메일 (@korea.kr)" maxlength="40" onkeypress="if(event.key==='Enter') handlePasswordReset()">
+            <input type="password" id="forgot-newpw" placeholder="새 비밀번호 입력" maxlength="20" onkeypress="if(event.key==='Enter') handlePasswordReset()">
             <button class="btn-main" onclick="handlePasswordReset()">비밀번호 변경 🔄</button>
             <div style="text-align:center; font-size:12px; margin-top:10px;">
                 <span style="color:#aaa; cursor:pointer;" onclick="switchAuthMode('login')">돌아가기</span>
@@ -149,7 +166,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.12 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.6 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -171,7 +188,7 @@
             </div>
 
             <div class="panel" style="display:flex; flex-direction:column;">
-                <h3>🟢 접속자 (<span id="online-count">0</span>명) <span style="font-size:10px; color:#f6ad55; font-weight:normal;"><br>💡 클릭시 귓속말</span></h3>
+                <h3>🟢 접속자 (<span id="online-count">0</span>명) <span style="font-size:10px; color:#f6ad55; font-weight:normal;"><br>💡 클릭시 귓속말 (재클릭시 해제)</span></h3>
                 <ul class="user-list" id="online-user-list" style="max-height:120px; overflow-y:auto; margin-bottom:10px;"></ul>
                 
                 <h3 style="margin-top:0;">💬 로비 채팅 <span id="chat-target-indicator" style="font-size:10px; color:#f6ad55; font-weight:bold;"></span></h3>
@@ -189,26 +206,37 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display:flex; align-items:center; gap:10px;">
                 <h3>🏠 방 이름: <span id="display-room-id" style="color:#66fcf1;"></span></h3>
-                <button id="btn-explode-room" class="btn-explode hidden" style="width:auto; padding:4px 10px; font-size:12px;" onclick="explodeRoom()">💣 방 폭파</button>
+                <button id="btn-explode-room" class="btn-explode admin-only hidden" style="width:auto; padding:4px 10px; font-size:12px;" onclick="explodeRoom()">💣 방 폭파</button>
             </div>
             <button class="btn-danger" style="width:auto;" onclick="leaveRoom()">방 나가기 🚪</button>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-top:15px;">
+            <!-- 파란팀 -->
             <div style="background:#121821; padding:12px; border-radius:8px; border-top:4px solid #3182ce;">
                 <div style="display:flex; justify-content:space-between; align-items:center; color:#63b3ed; font-weight:bold;">
                     <span>🔵 파란팀</span>
-                    <button class="btn-blue" style="width:auto; padding:3px 8px; font-size:11px;" onclick="selectTeam('blue')">참가</button>
+                    <div style="display:flex; gap:4px;">
+                        <button class="btn-ai host-only hidden" style="width:auto; padding:3px 6px; font-size:10px;" onclick="openAddAiModal('blue')">+ AI</button>
+                        <button class="btn-blue" style="width:auto; padding:3px 8px; font-size:11px;" onclick="selectTeam('blue')">참가</button>
+                    </div>
                 </div>
                 <ul class="user-list" id="room-list-blue" style="margin-top:8px;"></ul>
             </div>
+
+            <!-- 빨간팀 -->
             <div style="background:#121821; padding:12px; border-radius:8px; border-top:4px solid #e53e3e;">
                 <div style="display:flex; justify-content:space-between; align-items:center; color:#feb2b2; font-weight:bold;">
                     <span>🔴 빨간팀</span>
-                    <button class="btn-red" style="width:auto; padding:3px 8px; font-size:11px;" onclick="selectTeam('red')">참가</button>
+                    <div style="display:flex; gap:4px;">
+                        <button class="btn-ai host-only hidden" style="width:auto; padding:3px 6px; font-size:10px;" onclick="openAddAiModal('red')">+ AI</button>
+                        <button class="btn-red" style="width:auto; padding:3px 8px; font-size:11px;" onclick="selectTeam('red')">참가</button>
+                    </div>
                 </div>
                 <ul class="user-list" id="room-list-red" style="margin-top:8px;"></ul>
             </div>
+
+            <!-- 관전자 -->
             <div style="background:#121821; padding:12px; border-radius:8px; border-top:4px solid #805ad5;">
                 <div style="display:flex; justify-content:space-between; align-items:center; color:#b794f4; font-weight:bold;">
                     <span>👁️ 관전</span>
@@ -237,25 +265,34 @@
     <div id="view-game" class="card hidden">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="display:flex; align-items:center; gap:10px;">
-                <div style="font-size: 14px; font-weight: bold; color: #66fcf1;">🎮 오셀로 대국 중</div>
-                <button id="btn-explode-game" class="btn-explode hidden" style="width:auto; padding:3px 8px; font-size:11px;" onclick="explodeRoom()">💣 방 폭파</button>
+                <div style="font-size: 14px; font-weight: bold; color: #66fcf1;">🎮 오셀로 대국 중 <span style="font-size:11px; color:#aaa; font-weight:normal;">(💡 ESC 키로 일시정지 가능)</span></div>
+                <button id="btn-explode-game" class="btn-explode admin-only hidden" style="width:auto; padding:3px 8px; font-size:11px;" onclick="explodeRoom()">💣 방 폭파</button>
             </div>
             <button class="btn-danger" style="width:auto;" onclick="leaveRoom()">게임 나가기 🚪</button>
         </div>
+
         <div class="game-layout">
             <div>
                 <div id="game-turn-badge" style="text-align: center; font-size: 18px; font-weight: bold; color: #66fcf1; margin-bottom: 8px; background: #121821; padding: 10px; border-radius: 8px; border: 1px solid #2d3748;">턴 정보</div>
+                
                 <div style="display: flex; justify-content: space-around; font-size: 15px; font-weight: bold; margin-bottom: 10px;">
                     <span style="color: #63b3ed;">🔵 파란팀: <span id="score-blue">2</span>개</span>
                     <span style="color: #feb2b2;">🔴 빨간팀: <span id="score-red">2</span>개</span>
                 </div>
                 <div class="board-wrapper">
                     <div class="othello-board" id="othello-board"></div>
+
+                    <div id="pause-overlay" class="hidden">
+                        <h2 style="color: #ffd700; margin-bottom: 10px;">⏸️ 게임 일시정지</h2>
+                        <p id="pause-by-text" style="font-size: 14px; color: #e0e6ed; margin-bottom: 20px; text-align: center;"></p>
+                        <button class="btn-main" style="width: 160px; padding: 10px;" onclick="resumeGame()">게임 재개하기 ▶️</button>
+                    </div>
                 </div>
                 <div style="text-align: center; margin-top: 15px;">
                     <button id="btn-back-lobby" class="btn-main hidden" style="width:auto; padding:10px 20px;" onclick="returnToLobby()">로비로 돌아가기 🔄</button>
                 </div>
             </div>
+
             <div class="game-chat-panel">
                 <h3 style="margin-top:0; font-size:13px; border-bottom:1px solid #2d3748; padding-bottom:6px;">💬 게임방 채팅</h3>
                 <div class="game-chat-msgs" id="game-chat-msgs"></div>
@@ -286,7 +323,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.12.html';
+        a.download = 'othello_v2.6.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -305,21 +342,9 @@
         return userId;
     }
 
-    function calculateDan(user, sortedUsers) {
-        if (user.id === ADMIN_ID) return "마스터(관리자)";
-        const score = user.score || 0;
-        if (score === 0) return "0승 (무단)";
-
-        const totalUsers = sortedUsers.length;
-        const normalUsers = sortedUsers.filter(u => u.id !== ADMIN_ID);
-        const rankIndex = normalUsers.findIndex(u => u.id === user.id);
-        const percentile = totalUsers > 1 ? (rankIndex / totalUsers) * 100 : 0;
-
-        if (percentile <= 5 || score >= 20) return "5단 (고수)";
-        if (percentile <= 15 || score >= 15) return "4단";
-        if (percentile <= 30 || score >= 10) return "3단";
-        if (percentile <= 55 || score >= 5) return "2단";
-        return `1단 (${score}승)`;
+    function getGradeText(score, isAdmin) {
+        if (isAdmin) return "마스터(관리자)";
+        return `${score || 0}승`;
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
@@ -350,11 +375,8 @@
                 if (currentUser.id === ADMIN_ID) currentUser.score = 999;
                 else if (currentUser.score === undefined) currentUser.score = 0;
 
-                let userArray = Object.values(globalData.users);
-                userArray.sort((a, b) => (b.score || 0) - (a.score || 0));
-
                 document.getElementById('my-profile-name').innerText = getDisplayName(currentUser.id);
-                document.getElementById('my-profile-grade').innerText = calculateDan(currentUser, userArray);
+                document.getElementById('my-profile-grade').innerText = getGradeText(currentUser.score, currentUser.id === ADMIN_ID);
 
                 if (sessionRoomId && globalData.rooms && globalData.rooms[sessionRoomId]) {
                     const room = globalData.rooms[sessionRoomId];
@@ -382,7 +404,7 @@
     function startHeartbeat() {
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(async () => {
-            if (currentUser && currentUser.id !== ADMIN_ID) {
+            if (currentUser) {
                 const now = Date.now();
                 currentUser.lastActive = now;
                 await saveSpecificData('users/' + currentUser.id + '/lastActive', now);
@@ -406,35 +428,26 @@
                     globalData.lobbyChat = data.lobbyChat || [];
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error("Firebase 통신 오류:", e);
+        }
 
         if (!globalData.users) globalData.users = {};
         if (!globalData.rooms) globalData.rooms = {};
         if (!globalData.lobbyChat) globalData.lobbyChat = [];
 
-        globalData.users[ADMIN_ID] = { id: ADMIN_ID, pw: "tmdgus12!@", email: "admin@korea.kr", score: 999, lastActive: Date.now() };
-
-        if (currentUser && currentUser.id !== ADMIN_ID) {
-            if (!globalData.users[currentUser.id]) {
-                alert("관리자에 의해 계정이 탈퇴(삭제)되었습니다.");
-                handleLogout();
-                return;
-            }
-        }
+        globalData.users[ADMIN_ID] = { id: ADMIN_ID, pw: "tmdgus12!@", email: "admin@korea.kr", score: 999 };
 
         await cleanupEmptyRooms();
 
         if (!currentUser) return;
-
-        let userArray = Object.values(globalData.users);
-        userArray.sort((a, b) => (b.score || 0) - (a.score || 0));
 
         if (globalData.users[currentUser.id]) {
             if (currentUser.id === ADMIN_ID) currentUser.score = 999;
             else currentUser.score = globalData.users[currentUser.id].score || 0;
             
             document.getElementById('my-profile-name').innerText = getDisplayName(currentUser.id);
-            document.getElementById('my-profile-grade').innerText = calculateDan(currentUser, userArray);
+            document.getElementById('my-profile-grade').innerText = getGradeText(currentUser.score, currentUser.id === ADMIN_ID);
         }
 
         if (currentRoomId) {
@@ -443,7 +456,7 @@
                 currentRoomId = null;
                 localStorage.removeItem('othello_session_room');
                 switchView('view-lobby');
-                alert("방이 폭파되었거나 종료되었습니다.");
+                alert("방이 삭제되었거나 종료되었습니다.");
                 return;
             }
         }
@@ -452,24 +465,27 @@
             renderLobbyView();
         } else {
             renderRoomOrGameView();
+            checkAndTriggerAiTurn();
         }
     }
 
     async function cleanupEmptyRooms() {
         if (!globalData.rooms) return;
         const now = Date.now();
+        
         for (const [rId, room] of Object.entries(globalData.rooms)) {
             if (!room.players) {
                 delete globalData.rooms[rId];
                 await removeSpecificData('rooms/' + rId);
                 continue;
             }
+
             const humanPlayers = Object.entries(room.players).filter(([pId, pData]) => {
                 if (pData.isAi) return false;
-                if (pId === ADMIN_ID) return true;
                 const userObj = globalData.users[pId];
                 return userObj && (now - (userObj.lastActive || 0) < 20000);
             });
+
             if (humanPlayers.length === 0) {
                 delete globalData.rooms[rId];
                 await removeSpecificData('rooms/' + rId);
@@ -490,7 +506,9 @@
                 body: JSON.stringify(data)
             });
             return res.ok;
-        } catch (e) { return false; }
+        } catch (e) {
+            return false;
+        }
     }
 
     async function removeSpecificData(path) {
@@ -503,6 +521,7 @@
         document.getElementById('form-login').classList.add('hidden');
         document.getElementById('form-signup').classList.add('hidden');
         document.getElementById('form-forgot').classList.add('hidden');
+
         if (mode === 'login') document.getElementById('form-login').classList.remove('hidden');
         if (mode === 'signup') document.getElementById('form-signup').classList.remove('hidden');
         if (mode === 'forgot') document.getElementById('form-forgot').classList.remove('hidden');
@@ -563,22 +582,6 @@
         switchAuthMode('login');
     }
 
-    async function handlePasswordReset() {
-        let id = document.getElementById('forgot-id').value.trim();
-        let email = document.getElementById('forgot-email').value.trim();
-        let newPw = document.getElementById('forgot-newpw').value.trim();
-
-        if (!id || !email || !newPw) return alert("모든 항목을 입력해주세요.");
-        await fetchSystemData();
-        let user = globalData.users[id];
-        if (!user || user.email !== email) return alert("아이디 또는 이메일 정보가 일치하지 않습니다.");
-
-        user.pw = newPw;
-        await saveSpecificData('users/' + id, user);
-        alert("비밀번호가 성공적으로 변경되었습니다.");
-        switchAuthMode('login');
-    }
-
     function handleLogout() {
         currentUser = null;
         currentRoomId = null;
@@ -587,16 +590,6 @@
         if (syncInterval) clearInterval(syncInterval);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         switchView('view-auth');
-    }
-
-    async function adminDeleteUser(targetId) {
-        if (!currentUser || currentUser.id !== ADMIN_ID) return;
-        if (targetId === ADMIN_ID) return alert("관리자 계정은 탈퇴시킬 수 없습니다.");
-        if (confirm(`[관리자 권한] '${targetId}' 유저를 탈퇴(삭제)시키겠습니까?`)) {
-            await removeSpecificData('users/' + targetId);
-            alert("해당 유저를 탈퇴 처리했습니다.");
-            fetchSystemData();
-        }
     }
 
     function renderLobbyView() {
@@ -611,33 +604,25 @@
         if (!globalData.users) return;
 
         let userArray = Object.values(globalData.users);
+        
         userArray.sort((a, b) => {
             if (a.id === ADMIN_ID) return -1;
             if (b.id === ADMIN_ID) return 1;
             return (b.score || 0) - (a.score || 0);
         });
 
-        const isAdmin = currentUser && currentUser.id === ADMIN_ID;
         let html = '';
         userArray.forEach((u, index) => {
             const rankNum = index + 1;
-            const isUserAdmin = u.id === ADMIN_ID;
-            const nameDisplay = isUserAdmin ? '관리자' : u.id;
-            const danDisplay = calculateDan(u, userArray);
-            const adminClass = isUserAdmin ? 'rank-admin' : '';
-
-            let deleteBtn = '';
-            if (isAdmin && !isUserAdmin) {
-                deleteBtn = `<button class="btn-admin-action" onclick="adminDeleteUser('${u.id}')">탈퇴</button>`;
-            }
+            const isAdmin = u.id === ADMIN_ID;
+            const nameDisplay = isAdmin ? '관리자' : u.id;
+            const scoreDisplay = isAdmin ? '마스터' : `${u.score || 0}승`;
+            const adminClass = isAdmin ? 'rank-admin' : '';
 
             html += `
                 <div class="rank-item ${adminClass}">
                     <span><strong>${rankNum}.</strong> ${nameDisplay}</span>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:11px; color:#66fcf1;">${danDisplay}</span>
-                        ${deleteBtn}
-                    </div>
+                    <span>${scoreDisplay}</span>
                 </div>
             `;
         });
@@ -653,15 +638,20 @@
 
         let html = '';
         for (const [rId, room] of Object.entries(globalData.rooms)) {
-            const pCount = room.players ? Object.keys(room.players).length : 0;
-            const statusText = room.status === 'playing' ? '🔴 대국 중' : '🟢 대기 중';
+            const playerCount = Object.keys(room.players || {}).length;
+            const isPlaying = room.status === 'playing' || room.status === 'paused';
+            const statusBadge = isPlaying ? '<span style="color:#feb2b2; font-size:11px;">[대국중]</span>' : '<span style="color:#63b3ed; font-size:11px;">[대기중]</span>';
+
             html += `
                 <div class="room-item">
                     <div>
-                        <strong style="color:#66fcf1;">${room.title || rId}</strong>
-                        <div style="font-size:11px; color:#aaa; margin-top:2px;">상태: ${statusText} | 인원: ${pCount}명</div>
+                        <strong>${rId}</strong> ${statusBadge}
+                        <div style="font-size:11px; color:#aaa;">인원: ${playerCount}명 / ${room.boardSize || 8}x${room.boardSize || 8}</div>
                     </div>
-                    <button class="btn-blue" style="width:auto; padding:5px 12px; font-size:12px;" onclick="joinRoom('${rId}')">참가</button>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:12px;" onclick="joinRoom('${rId}')">참가</button>
+                        <button class="btn-purple" style="width:auto; padding:5px 10px; font-size:12px;" onclick="joinRoomAsSpectator('${rId}')">👁️ 관전</button>
+                    </div>
                 </div>
             `;
         }
@@ -669,127 +659,151 @@
     }
 
     function renderOnlineUsers() {
-        const listEl = document.getElementById('online-user-list');
-        const countEl = document.getElementById('online-count');
-        if (!globalData.users) return;
-
+        const list = document.getElementById('online-user-list');
+        const countSpan = document.getElementById('online-count');
         const now = Date.now();
-        let onlineUsers = Object.values(globalData.users).filter(u => {
-            if (u.id === ADMIN_ID) return true;
-            return (now - (u.lastActive || 0)) < 25000;
-        });
 
-        countEl.innerText = onlineUsers.length;
+        let activeUsers = Object.values(globalData.users || {}).filter(u => (now - (u.lastActive || 0)) < 20000);
+        countSpan.innerText = activeUsers.length;
+
         let html = '';
-        onlineUsers.forEach(u => {
+        activeUsers.forEach(u => {
             const isMe = currentUser && u.id === currentUser.id;
-            const nameDisp = getDisplayName(u.id);
+            const displayName = getDisplayName(u.id);
             html += `
-                <li class="user-item" onclick="setWhisperTarget('${u.id}')">
-                    <span>${nameDisp} ${isMe ? '(나)' : ''}</span>
-                    <span style="font-size:10px; color:#66fcf1;">${calculateDan(u, Object.values(globalData.users))}</span>
+                <li class="user-item" onclick="setWhisperTarget('${u.id}')" style="cursor:pointer;">
+                    <span>${u.id === ADMIN_ID ? '👑 ' : ''}${displayName} ${isMe ? '(나)' : ''}</span>
+                    <span style="font-size:10px; color:#66fcf1;">온라인</span>
                 </li>
             `;
         });
-        listEl.innerHTML = html || '<li style="padding:6px; color:#718096;">접속자가 없습니다.</li>';
+        list.innerHTML = html;
     }
 
     function setWhisperTarget(targetId) {
         if (currentUser && targetId === currentUser.id) return;
-        whisperTarget = targetId;
-        document.getElementById('chat-target-indicator').innerText = `[귓: ${getDisplayName(targetId)}]`;
+        if (whisperTarget === targetId) {
+            whisperTarget = null;
+            document.getElementById('chat-target-indicator').innerText = '';
+        } else {
+            whisperTarget = targetId;
+            document.getElementById('chat-target-indicator').innerText = `(귓속말 ➔ ${getDisplayName(targetId)})`;
+        }
     }
 
     function renderLobbyChat() {
-        const chatMsgs = document.getElementById('lobby-chat-msgs');
-        if (!globalData.lobbyChat) return;
-
+        const chatBox = document.getElementById('lobby-chat-msgs');
         let html = '';
-        globalData.lobbyChat.slice(-50).forEach(msg => {
-            const senderDisp = getDisplayName(msg.sender);
-            if (msg.whisper) {
+        (globalData.lobbyChat || []).forEach(msg => {
+            const senderName = getDisplayName(msg.sender);
+            if (msg.target) {
                 if (currentUser && (msg.sender === currentUser.id || msg.target === currentUser.id)) {
-                    html += `<div class="chat-msg whisper">🔒 (귓속말) <span class="sender" onclick="setWhisperTarget('${msg.sender}')">${senderDisp}</span>: ${msg.text}</div>`;
+                    html += `<div class="chat-msg whisper">[귓] <span class="sender">${senderName}</span>: ${msg.text}</div>`;
                 }
             } else {
-                html += `<div class="chat-msg"><span class="sender" onclick="setWhisperTarget('${msg.sender}')">${senderDisp}</span>: ${msg.text}</div>`;
+                html += `<div class="chat-msg"><span class="sender">${senderName}</span>: ${msg.text}</div>`;
             }
         });
-        chatMsgs.innerHTML = html;
-        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+        chatBox.innerHTML = html;
+        chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     async function sendLobbyChat() {
         const input = document.getElementById('lobby-chat-input');
         const text = input.value.trim();
-        if (!text) return;
-
-        let newMsg = { sender: currentUser.id, text: text, time: Date.now(), whisper: false, target: null };
-        if (whisperTarget) {
-            newMsg.whisper = true;
-            newMsg.target = whisperTarget;
-        }
+        if (!text || !currentUser) return;
 
         if (!globalData.lobbyChat) globalData.lobbyChat = [];
+        let newMsg = { sender: currentUser.id, text: text, timestamp: Date.now() };
+        if (whisperTarget) newMsg.target = whisperTarget;
+
         globalData.lobbyChat.push(newMsg);
+        if (globalData.lobbyChat.length > 50) globalData.lobbyChat.shift();
+
         await saveSpecificData('lobbyChat', globalData.lobbyChat);
         input.value = '';
     }
 
     async function createRoom() {
-        const roomName = prompt("생성할 방 이름을 입력하세요:", `${currentUser.id}의 방`);
-        if (!roomName) return;
+        const roomId = prompt("생성할 방 이름을 입력하세요:");
+        if (!roomId) return;
 
-        const roomId = 'room_' + Date.now();
+        await fetchSystemData();
+        if (globalData.rooms[roomId]) return alert("이미 존재하는 방 이름입니다.");
+
+        const boardSize = 8;
         const newRoom = {
             id: roomId,
-            title: roomName,
-            host: currentUser.id,
+            hostId: currentUser.id,
+            boardSize: boardSize,
             status: 'waiting',
-            boardSize: 8,
             players: {
-                [currentUser.id]: { team: 'blue', isHost: true }
+                [currentUser.id]: { id: currentUser.id, team: 'blue', isAi: false }
             },
+            board: createInitialBoard(boardSize),
+            turn: 'blue',
             chat: []
         };
 
-        await saveSpecificData('rooms/' + roomId, newRoom);
+        const success = await saveSpecificData('rooms/' + roomId, newRoom);
+        if (!success) {
+            return alert("방 생성에 실패했습니다. 다시 시도해주세요.");
+        }
+
         currentRoomId = roomId;
         localStorage.setItem('othello_session_room', roomId);
-        renderRoomOrGameView();
+        switchView('view-room');
     }
 
     async function joinRoom(roomId) {
         await fetchSystemData();
         const room = globalData.rooms[roomId];
-        if (!room) return alert("존재하지 않거나 폭파된 방입니다.");
+        if (!room) return alert("존재하지 않는 방입니다.");
 
         if (!room.players) room.players = {};
         if (!room.players[currentUser.id]) {
-            room.players[currentUser.id] = { team: 'spectator', isHost: false };
+            let team = 'blue';
+            const blueCount = Object.values(room.players).filter(p => p.team === 'blue').length;
+            const redCount = Object.values(room.players).filter(p => p.team === 'red').length;
+            if (blueCount > redCount) team = 'red';
+
+            room.players[currentUser.id] = { id: currentUser.id, team: team, isAi: false };
+            await saveSpecificData(`rooms/${roomId}/players/${currentUser.id}`, room.players[currentUser.id]);
         }
 
         currentRoomId = roomId;
         localStorage.setItem('othello_session_room', roomId);
-        await saveSpecificData('rooms/' + roomId, room);
+        renderRoomOrGameView();
+    }
+
+    async function joinRoomAsSpectator(roomId) {
+        await fetchSystemData();
+        const room = globalData.rooms[roomId];
+        if (!room) return alert("존재하지 않는 방입니다.");
+
+        if (!room.players) room.players = {};
+        room.players[currentUser.id] = { id: currentUser.id, team: 'spectator', isAi: false };
+
+        currentRoomId = roomId;
+        localStorage.setItem('othello_session_room', roomId);
+        await saveSpecificData(`rooms/${roomId}/players/${currentUser.id}`, room.players[currentUser.id]);
         renderRoomOrGameView();
     }
 
     async function leaveRoom() {
-        if (!currentRoomId) return;
+        if (!currentRoomId || !currentUser) return;
         const roomId = currentRoomId;
-        await fetchSystemData();
         const room = globalData.rooms[roomId];
 
         if (room && room.players) {
             delete room.players[currentUser.id];
-            if (Object.keys(room.players).length === 0) {
+            
+            const humanRemaining = Object.entries(room.players).filter(([pId, pData]) => !pData.isAi);
+            if (humanRemaining.length === 0) {
                 await removeSpecificData('rooms/' + roomId);
             } else {
-                if (room.host === currentUser.id) {
-                    const nextHostId = Object.keys(room.players)[0];
-                    room.host = nextHostId;
-                    room.players[nextHostId].isHost = true;
+                if (room.hostId === currentUser.id) {
+                    room.hostId = humanRemaining[0][0];
                 }
                 await saveSpecificData('rooms/' + roomId, room);
             }
@@ -800,271 +814,318 @@
         switchView('view-lobby');
     }
 
-    async function explodeRoom() {
-        if (!currentRoomId) return;
-        if (confirm("정말로 방을 폭파하시겠습니까?")) {
-            const roomId = currentRoomId;
-            await removeSpecificData('rooms/' + roomId);
-            currentRoomId = null;
-            localStorage.removeItem('othello_session_room');
-            switchView('view-lobby');
-        }
+    async function selectTeam(teamName) {
+        if (!currentRoomId || !currentUser) return;
+        const room = globalData.rooms[currentRoomId];
+        if (!room || !room.players[currentUser.id]) return;
+
+        room.players[currentUser.id].team = teamName;
+        await saveSpecificData(`rooms/${currentRoomId}/players/${currentUser.id}`, room.players[currentUser.id]);
     }
 
-    async function selectTeam(team) {
-        if (!currentRoomId) return;
-        const room = globalData.rooms[currentRoomId];
-        if (!room) return;
-
-        if (!room.players) room.players = {};
-        room.players[currentUser.id].team = team;
-        await saveSpecificData('rooms/' + currentRoomId, room);
-    }
-
-    async function updateBoardSizeSetting(size) {
-        if (!currentRoomId) return;
-        const room = globalData.rooms[currentRoomId];
-        if (!room || room.host !== currentUser.id) return;
-
-        room.boardSize = parseInt(size);
-        await saveSpecificData('rooms/' + currentRoomId + '/boardSize', room.boardSize);
+    function createInitialBoard(size) {
+        let board = Array(size).fill(null).map(() => Array(size).fill(null));
+        const mid = Math.floor(size / 2);
+        board[mid - 1][mid - 1] = 'red';
+        board[mid - 1][mid] = 'blue';
+        board[mid][mid - 1] = 'blue';
+        board[mid][mid] = 'red';
+        return board;
     }
 
     function renderRoomOrGameView() {
-        if (!currentRoomId) return;
         const room = globalData.rooms[currentRoomId];
         if (!room) return;
 
-        const isHost = room.host === currentUser.id || currentUser.id === ADMIN_ID;
-
-        if (room.status === 'waiting') {
-            switchView('view-room');
-            document.getElementById('display-room-id').innerText = room.title;
-
-            const explodeBtn = document.getElementById('btn-explode-room');
-            if (isHost) explodeBtn.classList.remove('hidden');
-            else explodeBtn.classList.add('hidden');
-
-            const hostControls = document.getElementById('room-host-controls');
-            if (isHost) hostControls.classList.remove('hidden');
-            else hostControls.classList.add('hidden');
-
-            document.getElementById('room-board-size').value = room.boardSize || 8;
-
-            let blueHtml = '', redHtml = '', specHtml = '';
-            if (room.players) {
-                for (const [pId, pData] of Object.entries(room.players)) {
-                    const nameDisp = getDisplayName(pId);
-                    const item = `<li class="user-item"><span>${nameDisp} ${pData.isHost ? '👑' : ''}</span></li>`;
-                    if (pData.team === 'blue') blueHtml += item;
-                    else if (pData.team === 'red') redHtml += item;
-                    else specHtml += item;
-                }
-            }
-            document.getElementById('room-list-blue').innerHTML = blueHtml || '<li style="color:#718096; padding:4px;">없음</li>';
-            document.getElementById('room-list-red').innerHTML = redHtml || '<li style="color:#718096; padding:4px;">없음</li>';
-            document.getElementById('room-list-spectator').innerHTML = specHtml || '<li style="color:#718096; padding:4px;">없음</li>';
-
-        } else if (room.status === 'playing') {
+        if (room.status === 'playing' || room.status === 'paused' || room.status === 'ended') {
             switchView('view-game');
-            const explodeGameBtn = document.getElementById('btn-explode-game');
-            if (isHost) explodeGameBtn.classList.remove('hidden');
-            else explodeGameBtn.classList.add('hidden');
-
-            renderOthelloBoard(room);
-            renderGameChat(room);
+            renderGameView(room);
+        } else {
+            switchView('view-room');
+            renderWaitingRoomView(room);
         }
+    }
+
+    function renderWaitingRoomView(room) {
+        document.getElementById('display-room-id').innerText = room.id;
+        const isHost = room.hostId === currentUser.id;
+        const isAdmin = currentUser.id === ADMIN_ID;
+
+        if (isHost) document.getElementById('room-host-controls').classList.remove('hidden');
+        else document.getElementById('room-host-controls').classList.add('hidden');
+
+        if (isAdmin) {
+            document.getElementById('btn-explode-room').classList.remove('hidden');
+        }
+
+        document.querySelectorAll('.host-only').forEach(el => {
+            if (isHost) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        });
+
+        let blueHtml = '', redHtml = '', specHtml = '';
+        Object.values(room.players || {}).forEach(p => {
+            const displayName = p.isAi ? p.id : getDisplayName(p.id);
+            const item = `<li class="user-item"><span>${p.isAi ? '🤖 ' : ''}${displayName}</span></li>`;
+            if (p.team === 'blue') blueHtml += item;
+            else if (p.team === 'red') redHtml += item;
+            else specHtml += item;
+        });
+
+        document.getElementById('room-list-blue').innerHTML = blueHtml;
+        document.getElementById('room-list-red').innerHTML = redHtml;
+        document.getElementById('room-list-spectator').innerHTML = specHtml;
     }
 
     async function startGame() {
         if (!currentRoomId) return;
         const room = globalData.rooms[currentRoomId];
-        if (!room) return;
+        const players = Object.values(room.players || {});
+        const hasBlue = players.some(p => p.team === 'blue');
+        const hasRed = players.some(p => p.team === 'red');
 
-        const size = room.boardSize || 8;
-        let board = Array(size).fill(0).map(() => Array(size).fill(null));
-        const mid = size / 2;
-        board[mid - 1][mid - 1] = 'red';
-        board[mid][mid] = 'red';
-        board[mid - 1][mid] = 'blue';
-        board[mid][mid - 1] = 'blue';
+        if (!hasBlue || !hasRed) {
+            return alert("파란팀과 빨간팀에 최소 1명 이상의 플레이어가 있어야 합니다.");
+        }
 
         room.status = 'playing';
-        room.board = board;
+        room.board = createInitialBoard(room.boardSize || 8);
         room.turn = 'blue';
-        room.winner = null;
+        hasPlayedConfetti = false;
 
         await saveSpecificData('rooms/' + currentRoomId, room);
     }
 
-    function renderOthelloBoard(room) {
+    function renderGameView(room) {
+        const boardSize = room.boardSize || 8;
         const boardEl = document.getElementById('othello-board');
-        const size = room.boardSize || 8;
-        boardEl.className = `othello-board size-${size}`;
+        boardEl.className = `othello-board size-${boardSize}`;
 
-        let board = room.board;
-        if (!board) return;
+        const isSpectator = room.players[currentUser.id]?.team === 'spectator';
+        const myTeam = room.players[currentUser.id]?.team;
 
-        let blueCount = 0, redCount = 0;
-        let html = '';
-
-        for (let r = 0; r < size; r++) {
-            for (let c = 0; c < size; c++) {
-                const cell = board[r][c];
-                if (cell === 'blue') blueCount++;
-                if (cell === 'red') redCount++;
-
-                let content = '';
-                if (cell === 'blue') content = '<div class="disc blue"></div>';
-                else if (cell === 'red') content = '<div class="disc red"></div>';
-                else if (isValidMove(board, r, c, room.turn, size)) {
-                    content = '<div class="valid-hint"></div>';
-                }
-
-                html += `<div class="cell" onclick="handleCellClick(${r}, ${c})">${content}</div>`;
+        let blueScore = 0, redScore = 0;
+        for (let r = 0; r < boardSize; r++) {
+            for (let c = 0; c < boardSize; c++) {
+                if (room.board[r][c] === 'blue') blueScore++;
+                if (room.board[r][c] === 'red') redScore++;
             }
         }
-
-        boardEl.innerHTML = html;
-        document.getElementById('score-blue').innerText = blueCount;
-        document.getElementById('score-red').innerText = redCount;
+        document.getElementById('score-blue').innerText = blueScore;
+        document.getElementById('score-red').innerText = redScore;
 
         const turnBadge = document.getElementById('game-turn-badge');
-        const backLobbyBtn = document.getElementById('btn-back-lobby');
-
-        if (room.winner) {
-            turnBadge.innerText = room.winner === 'draw' ? '🤝 무승부!' : `🎉 승리 팀: ${room.winner === 'blue' ? '🔵 파란팀' : '🔴 빨간팀'}!`;
-            backLobbyBtn.classList.remove('hidden');
-            if (!hasPlayedConfetti) {
+        if (room.status === 'ended') {
+            turnBadge.innerText = `🏆 게임 종료 - 승리: ${room.winner === 'blue' ? '🔵 파란팀' : (room.winner === 'red' ? '🔴 빨간팀' : '무승부')}`;
+            document.getElementById('btn-back-lobby').classList.remove('hidden');
+            if (!hasPlayedConfetti && room.winner) {
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
                 hasPlayedConfetti = true;
             }
         } else {
-            hasPlayedConfetti = false;
-            turnBadge.innerText = `현재 턴: ${room.turn === 'blue' ? '🔵 파란팀' : '🔴 빨간팀'}`;
-            backLobbyBtn.classList.add('hidden');
+            document.getElementById('btn-back-lobby').classList.add('hidden');
+            const turnColor = room.turn === 'blue' ? '🔵 파란팀' : '🔴 빨간팀';
+            turnBadge.innerText = `현재 턴: ${turnColor} ${isSpectator ? '(👁️ 관전 중)' : ''}`;
         }
-    }
 
-    function isValidMove(board, r, c, turn, size) {
-        if (board[r][c] !== null) return false;
-        const opponent = turn === 'blue' ? 'red' : 'blue';
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        if (room.status === 'paused') {
+            document.getElementById('pause-overlay').classList.remove('hidden');
+            document.getElementById('pause-by-text').innerText = `${getDisplayName(room.pausedBy)} 님이 게임을 일시정지했습니다.`;
+        } else {
+            document.getElementById('pause-overlay').classList.add('hidden');
+        }
 
-        for (let [dr, dc] of directions) {
-            let nr = r + dr, nc = c + dc;
-            let hasOpponentBetween = false;
-            while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === opponent) {
-                hasOpponentBetween = true;
-                nr += dr;
-                nc += dc;
-            }
-            if (hasOpponentBetween && nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === turn) {
-                return true;
+        let validMoves = (!isSpectator && room.turn === myTeam && room.status === 'playing') ? getValidMoves(room.board, boardSize, myTeam) : [];
+
+        let html = '';
+        for (let r = 0; r < boardSize; r++) {
+            for (let c = 0; c < boardSize; c++) {
+                const disc = room.board[r][c];
+                const isValid = validMoves.some(m => m.r === r && m.c === c);
+
+                html += `<div class="cell" onclick="handleCellClick(${r}, ${c})">`;
+                if (disc) {
+                    html += `<div class="disc ${disc}"></div>`;
+                } else if (isValid) {
+                    html += `<div class="valid-hint"></div>`;
+                }
+                html += `</div>`;
             }
         }
-        return false;
+        boardEl.innerHTML = html;
+
+        renderGameChat(room);
     }
 
     async function handleCellClick(r, c) {
-        if (!currentRoomId) return;
+        if (!currentRoomId || !currentUser) return;
         const room = globalData.rooms[currentRoomId];
-        if (!room || room.status !== 'playing' || room.winner) return;
+        if (!room || room.status !== 'playing') return;
 
-        const pData = room.players[currentUser.id];
-        if (!pData || pData.team !== room.turn) {
-            return alert("본인 팀의 차례가 아니거나 관전 중입니다.");
-        }
+        const myTeam = room.players[currentUser.id]?.team;
+        if (myTeam !== room.turn) return;
 
-        const size = room.boardSize || 8;
-        let board = room.board;
-        if (!isValidMove(board, r, c, room.turn, size)) return;
+        const boardSize = room.boardSize || 8;
+        const flips = getFlips(room.board, boardSize, r, c, myTeam);
+        if (flips.length === 0) return;
 
-        const turn = room.turn;
-        const opponent = turn === 'blue' ? 'red' : 'blue';
-        board[r][c] = turn;
+        room.board[r][c] = myTeam;
+        flips.forEach(f => { room.board[f.r][f.c] = myTeam; });
 
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-        for (let [dr, dc] of directions) {
-            let nr = r + dr, nc = c + dc;
-            let flips = [];
-            while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === opponent) {
-                flips.push([nr, nc]);
-                nr += dr;
-                nc += dc;
-            }
-            if (flips.length > 0 && nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === turn) {
-                for (let [fr, fc] of flips) board[fr][fc] = turn;
-            }
-        }
+        const nextTeam = myTeam === 'blue' ? 'red' : 'blue';
+        const nextMoves = getValidMoves(room.board, boardSize, nextTeam);
 
-        let nextTurn = opponent;
-        if (!hasAnyValidMove(board, nextTurn, size)) {
-            nextTurn = turn;
-            if (!hasAnyValidMove(board, nextTurn, size)) {
-                room.winner = checkWinner(board);
+        if (nextMoves.length > 0) {
+            room.turn = nextTeam;
+        } else {
+            const currentTeamMoves = getValidMoves(room.board, boardSize, myTeam);
+            if (currentTeamMoves.length === 0) {
+                room.status = 'ended';
+                const { blue, red } = countDiscs(room.board, boardSize);
+                if (blue > red) room.winner = 'blue';
+                else if (red > blue) room.winner = 'red';
+                else room.winner = 'draw';
+
+                await updatePlayerWins(room);
             }
         }
 
-        room.turn = nextTurn;
-        room.board = board;
         await saveSpecificData('rooms/' + currentRoomId, room);
     }
 
-    function hasAnyValidMove(board, turn, size) {
-        for (let r = 0; r < size; r++) {
-            for (let c = 0; c < size; c++) {
-                if (isValidMove(board, r, c, turn, size)) return true;
+    async function updatePlayerWins(room) {
+        if (!room.winner || room.winner === 'draw') return;
+        for (const [pId, pData] of Object.entries(room.players)) {
+            if (pData.team === room.winner && !pData.isAi && pId !== ADMIN_ID) {
+                const user = globalData.users[pId];
+                if (user) {
+                    user.score = (user.score || 0) + 1;
+                    await saveSpecificData(`users/${pId}/score`, user.score);
+                }
             }
         }
-        return false;
     }
 
-    function checkWinner(board) {
+    function countDiscs(board, size) {
         let blue = 0, red = 0;
-        board.flat().forEach(cell => {
-            if (cell === 'blue') blue++;
-            if (cell === 'red') red++;
-        });
-        if (blue > red) return 'blue';
-        if (red > blue) return 'red';
-        return 'draw';
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (board[r][c] === 'blue') blue++;
+                if (board[r][c] === 'red') red++;
+            }
+        }
+        return { blue, red };
     }
 
-    async function returnToLobby() {
+    function getValidMoves(board, size, team) {
+        let moves = [];
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (!board[r][c] && getFlips(board, size, r, c, team).length > 0) {
+                    moves.push({ r, c });
+                }
+            }
+        }
+        return moves;
+    }
+
+    function getFlips(board, size, r, c, team) {
+        if (board[r][c]) return [];
+        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        const opponent = team === 'blue' ? 'red' : 'blue';
+        let totalFlips = [];
+
+        directions.forEach(([dr, dc]) => {
+            let nr = r + dr, nc = c + dc;
+            let tempFlips = [];
+            while (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === opponent) {
+                tempFlips.push({ r: nr, c: nc });
+                nr += dr; nc += dc;
+            }
+            if (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === team) {
+                totalFlips = totalFlips.concat(tempFlips);
+            }
+        });
+
+        return totalFlips;
+    }
+
+    async function checkAndTriggerAiTurn() {
         if (!currentRoomId) return;
         const room = globalData.rooms[currentRoomId];
-        if (room) {
-            room.status = 'waiting';
-            room.winner = null;
-            await saveSpecificData('rooms/' + currentRoomId, room);
+        if (!room || room.status !== 'playing') return;
+
+        const currentTurn = room.turn;
+        const currentTurnPlayers = Object.values(room.players || {}).filter(p => p.team === currentTurn);
+
+        if (currentTurnPlayers.length > 0 && currentTurnPlayers.every(p => p.isAi)) {
+            if (room.hostId === currentUser.id) {
+                const boardSize = room.boardSize || 8;
+                const validMoves = getValidMoves(room.board, boardSize, currentTurn);
+                if (validMoves.length > 0) {
+                    const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                    setTimeout(async () => {
+                        const flips = getFlips(room.board, boardSize, randomMove.r, randomMove.c, currentTurn);
+                        room.board[randomMove.r][randomMove.c] = currentTurn;
+                        flips.forEach(f => { room.board[f.r][f.c] = currentTurn; });
+
+                        const nextTeam = currentTurn === 'blue' ? 'red' : 'blue';
+                        if (getValidMoves(room.board, boardSize, nextTeam).length > 0) {
+                            room.turn = nextTeam;
+                        }
+                        await saveSpecificData('rooms/' + currentRoomId, room);
+                    }, 800);
+                }
+            }
         }
+    }
+
+    async function openAddAiModal(team) {
+        if (!currentRoomId) return;
+        const room = globalData.rooms[currentRoomId];
+        const aiId = `AI_${Math.floor(Math.random() * 1000)}`;
+        room.players[aiId] = { id: aiId, team: team, isAi: true };
+        await saveSpecificData(`rooms/${currentRoomId}/players/${aiId}`, room.players[aiId]);
     }
 
     function renderGameChat(room) {
-        const chatMsgs = document.getElementById('game-chat-msgs');
-        if (!room.chat) return;
-
+        const chatBox = document.getElementById('game-chat-msgs');
         let html = '';
-        room.chat.forEach(msg => {
-            html += `<div class="chat-msg"><span class="sender">${getDisplayName(msg.sender)}</span>: ${msg.text}</div>`;
+        (room.chat || []).forEach(msg => {
+            const senderName = getDisplayName(msg.sender);
+            html += `<div class="chat-msg"><span class="sender">${senderName}</span>: ${msg.text}</div>`;
         });
-        chatMsgs.innerHTML = html;
-        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+        chatBox.innerHTML = html;
+        chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     async function sendGameChat() {
         const input = document.getElementById('game-chat-input');
         const text = input.value.trim();
-        if (!text || !currentRoomId) return;
+        if (!text || !currentRoomId || !currentUser) return;
 
         const room = globalData.rooms[currentRoomId];
-        if (!room) return;
-
         if (!room.chat) room.chat = [];
-        room.chat.push({ sender: currentUser.id, text: text, time: Date.now() });
-        await saveSpecificData('rooms/' + currentRoomId + '/chat', room.chat);
+        room.chat.push({ sender: currentUser.id, text: text, timestamp: Date.now() });
+
+        await saveSpecificData(`rooms/${currentRoomId}/chat`, room.chat);
         input.value = '';
+    }
+
+    function returnToLobby() {
+        leaveRoom();
+    }
+
+    async function explodeRoom() {
+        if (!currentUser || currentUser.id !== ADMIN_ID) return;
+        if (!currentRoomId) return;
+        if (confirm("정말로 이 방을 폭파하시겠습니까?")) {
+            const rId = currentRoomId;
+            currentRoomId = null;
+            localStorage.removeItem('othello_session_room');
+            await removeSpecificData('rooms/' + rId);
+            switchView('view-lobby');
+        }
     }
 </script>
 </body>
