@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.23 - 로그인 및 데이터 동기화 안정화)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.23)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.23 (로그인/동기화 안정화)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.23</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -422,15 +422,18 @@
         if (!globalData.rooms) globalData.rooms = {};
         if (!globalData.lobbyChat) globalData.lobbyChat = [];
 
-        // 관리자 계정 보정 반영
-        globalData.users[ADMIN_ID] = {
-            ...(globalData.users[ADMIN_ID] || {}),
-            id: ADMIN_ID,
-            pw: "tmdgus12!@",
-            email: "admin@korea.kr",
-            score: 999,
-            lastActive: Date.now()
-        };
+        // 관리자 계정 보정 (기존 일반 유저 데이터를 덮어쓰지 않도록 수정)
+        if (!globalData.users[ADMIN_ID]) {
+            globalData.users[ADMIN_ID] = {
+                id: ADMIN_ID,
+                pw: "tmdgus12!@",
+                email: "admin@korea.kr",
+                score: 999,
+                lastActive: Date.now()
+            };
+        } else {
+            globalData.users[ADMIN_ID].score = 999;
+        }
 
         if (currentUser && currentUser.id !== ADMIN_ID && !globalData.users[currentUser.id]) {
             alert("관리자에 의해 계정이 탈퇴(삭제)되었습니다.");
@@ -645,7 +648,6 @@
 
     async function cleanupEmptyRooms() {
         if (!globalData.rooms) return;
-        const now = Date.now();
         for (const [rId, room] of Object.entries(globalData.rooms)) {
             if (!room.players) {
                 delete globalData.rooms[rId];
@@ -664,18 +666,93 @@
         if (mode === 'forgot') document.getElementById('form-forgot').classList.remove('hidden');
     }
 
-    // 렌더링 및 게임 핵심 함수들 자리
     function renderLobbyView() {
         switchView('view-lobby');
+        // 랭킹 목록 렌더링
+        const rankListEl = document.getElementById('ranking-list');
+        let usersArr = Object.values(globalData.users);
+        usersArr.sort((a, b) => (b.score || 0) - (a.score || 0));
+        
+        if (rankListEl) {
+            rankListEl.innerHTML = usersArr.map((u, idx) => `
+                <div class="rank-item ${u.id === ADMIN_ID ? 'rank-admin' : ''}">
+                    <span>${idx + 1}. ${getDisplayName(u.id)}</span>
+                    <span>${calculateDan(u, usersArr)}</span>
+                </div>
+            `).join('');
+        }
+
+        // 접속자 목록 렌더링
+        const onlineListEl = document.getElementById('online-user-list');
+        const onlineCountEl = document.getElementById('online-count');
+        const now = Date.now();
+        const activeUsers = usersArr.filter(u => u.id === ADMIN_ID || (now - (u.lastActive || 0)) < 15000);
+        
+        if (onlineCountEl) onlineCountEl.innerText = activeUsers.length;
+        if (onlineListEl) {
+            onlineListEl.innerHTML = activeUsers.map(u => `
+                <li class="user-item" onclick="setWhisperTarget('${u.id}')" style="cursor:pointer;">
+                    <span>${getDisplayName(u.id)} ${u.id === currentUser.id ? '(나)' : ''}</span>
+                    <span style="font-size:10px; color:#68d391;">● 온라인</span>
+                </li>
+            `).join('');
+        }
+
+        // 방 목록 렌더링
+        const roomListBox = document.getElementById('room-list-box');
+        const roomsArr = Object.entries(globalData.rooms || {});
+        if (roomListBox) {
+            if (roomsArr.length === 0) {
+                roomListBox.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">개설된 방이 없습니다.</div>';
+            } else {
+                roomListBox.innerHTML = roomsArr.map(([rId, room]) => `
+                    <div class="room-item">
+                        <div>
+                            <strong>${room.title || rId}</strong>
+                            <div style="font-size:11px; color:#888;">상태: ${room.status === 'playing' ? '게임 중 🎮' : '대기 중 ⏳'}</div>
+                        </div>
+                        <button class="btn-blue" style="width:auto; padding:5px 10px;" onclick="joinRoom('${rId}')">입장</button>
+                    </div>
+                `).join('');
+            }
+        }
     }
+
     function renderRoomOrGameView() {
         if (currentRoomId) {
             const room = globalData.rooms[currentRoomId];
-            if (room && room.status === 'playing') switchView('view-game');
-            else switchView('view-room');
+            if (room && room.status === 'playing') {
+                switchView('view-game');
+            } else {
+                switchView('view-room');
+            }
         }
     }
+
     function updateTurnTimerDisplay(room) {}
+    function createRoom() {
+        alert("방 만들기 기능 호출됨");
+    }
+    function joinRoom(rId) {
+        currentRoomId = rId;
+        localStorage.setItem('othello_session_room', rId);
+        renderRoomOrGameView();
+    }
+    function leaveRoom() {
+        currentRoomId = null;
+        localStorage.removeItem('othello_session_room');
+        renderLobbyView();
+    }
+    function selectTeam(team) {}
+    function startGame() {}
+    function returnToLobby() {}
+    function sendLobbyChat() {}
+    function sendGameChat() {}
+    function explodeRoom() {}
+    function setWhisperTarget(id) {
+        whisperTarget = id;
+        document.getElementById('chat-target-indicator').innerText = ` [${getDisplayName(id)}님에게 귓속말 중]`;
+    }
 </script>
 </body>
 </html>
