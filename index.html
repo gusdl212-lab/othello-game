@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.11 - 단/점수제 랭킹 적용)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.12 - 단/점수제 랭킹 적용)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -98,7 +98,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.11 (단/점수제 랭킹 적용)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.12 (단/점수제 랭킹 적용)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -151,7 +151,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.11 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.12 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -283,6 +283,8 @@
     let whisperTarget = null; 
     let turnTimerInterval = null;
     let timeoutProcessing = false;
+    // 현재 방의 착수/타임아웃 저장 중에는 1.5초 주기 동기화가 오래된 Firebase 상태로 덮어쓰지 않도록 잠금
+    let roomWriteInProgress = false;
 
     function downloadLatestCode() {
         const htmlContent = document.documentElement.outerHTML;
@@ -290,7 +292,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.11.html';
+        a.download = 'othello_v2.12.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -427,7 +429,16 @@
                 let data = await res.json();
                 if (data) {
                     globalData.users = data.users || {};
-                    globalData.rooms = data.rooms || {};
+                    const incomingRooms = data.rooms || {};
+                    const localCurrentRoom = currentRoomId ? globalData.rooms[currentRoomId] : null;
+
+                    // 착수 저장 중에는 Firebase에 아직 PUT이 끝나지 않았을 수 있다.
+                    // 이때 이전 데이터를 그대로 받아오면 방금 놓은 돌/턴이 화면에서 되돌아간다.
+                    globalData.rooms = incomingRooms;
+                    if (roomWriteInProgress && currentRoomId && localCurrentRoom) {
+                        globalData.rooms[currentRoomId] = localCurrentRoom;
+                    }
+
                     globalData.lobbyChat = data.lobbyChat || [];
                 }
             }
@@ -979,7 +990,8 @@
 
         if (!isValidBoard) {
             room.board = createInitialBoard(boardSize);
-            saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
+            // 보드 복구는 현재 방 상태와 함께 저장한다. 별도 비동기 PUT을 하지 않아
+            // 착수 중인 전체 방 저장을 덮어쓰는 경쟁 상태를 만들지 않는다.
         }
 
         // [시간 제한] 기존 게임에 타이머 정보가 없으면 지금부터 30초를 시작
@@ -1074,6 +1086,7 @@
         if (Date.now() - Number(cachedRoom.turnStartedAt) < 30000) return;
 
         timeoutProcessing = true;
+        roomWriteInProgress = true;
 
         try {
             // 클릭과 동일하게 항상 최신 Firebase 데이터를 기준으로 처리하여
@@ -1133,6 +1146,7 @@
 
             await saveSpecificData('rooms/' + currentRoomId, room);
         } finally {
+            roomWriteInProgress = false;
             timeoutProcessing = false;
         }
     }
@@ -1170,8 +1184,9 @@
         const flips = getFlips(cachedRoom.board, boardSize, r, c, myTeam);
         if (flips.length === 0) return;
 
-        // 중복 클릭/동시 처리 방지
+        // 중복 클릭/동시 처리 방지 + 주기적 Firebase 동기화가 오래된 상태를 덮어쓰는 것 방지
         timeoutProcessing = true;
+        roomWriteInProgress = true;
 
         try {
             // 착수 즉시 로컬 상태를 변경하여 사용자가 누른 돌이 바로 보이게 한다.
@@ -1216,6 +1231,7 @@
             // 그 다음 Firebase에 전체 방 상태 저장
             await saveSpecificData('rooms/' + currentRoomId, cachedRoom);
         } finally {
+            roomWriteInProgress = false;
             timeoutProcessing = false;
         }
     }
