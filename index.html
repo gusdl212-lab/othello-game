@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.12)</title>
+    <title>🔵🔴 멀티 오셀로 대전 플랫폼 (v2.12)</title>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
         body { margin: 0; padding: 15px; background: #0b0c10; color: #e0e6ed; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { width: 100%; max-width: 950px; background: #1f2833; border-radius: 16px; padding: 20px; box-shadow: 0 0 30px rgba(0, 255, 204, 0.1); border: 1px solid #45a29e; position: relative; }
+        .container { width: 100%; max-width: 1000px; background: #1f2833; border-radius: 16px; padding: 20px; box-shadow: 0 0 30px rgba(0, 255, 204, 0.1); border: 1px solid #45a29e; position: relative; }
         h1 { text-align: center; color: #66fcf1; margin-top: 0; margin-bottom: 5px; font-size: 24px; }
         .status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #4eacc5; margin-bottom: 15px; background: #121821; padding: 6px 12px; border-radius: 6px; border: 1px solid #2d3748; }
         .card { background: #0b0c10; border-radius: 12px; padding: 20px; margin-bottom: 15px; border: 1px solid #2d3748; }
@@ -19,11 +19,11 @@
         .btn-danger { background: #e53e3e; color: #fff; padding: 5px 10px; font-size: 11px; width: auto; }
         .btn-explode { background: #805ad5; color: #fff; }
         .btn-spectate { background: #319795; color: #fff; }
-        .lobby-grid { display: grid; grid-template-columns: 260px 1fr 240px; gap: 15px; }
+        .lobby-grid { display: grid; grid-template-columns: 280px 1fr 260px; gap: 15px; }
         .panel { background: #121821; border-radius: 10px; padding: 12px; border: 1px solid #2d3748; height: 460px; overflow-y: auto; }
         .panel h3 { font-size: 14px; color: #66fcf1; margin-top: 0; border-bottom: 1px solid #2d3748; padding-bottom: 8px; }
         .rank-item, .user-item, .room-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid #1f2833; }
-        .user-item { background: #1f2833; margin-bottom: 4px; border-radius: 4px; cursor: pointer; }
+        .user-item { background: #1f2833; margin-bottom: 4px; border-radius: 4px; }
         .chat-msg { margin-bottom: 6px; word-break: break-all; font-size: 12px; }
         .chat-msg span.sender { color: #66fcf1; font-weight: bold; }
         .chat-msg.whisper { color: #f6ad55; background: rgba(246, 173, 85, 0.1); padding: 4px; border-left: 3px solid #f6ad55; }
@@ -33,21 +33,23 @@
         .cell { background: #2e7d32; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; position: relative; }
         .cell:hover { background: #388e3c; }
         .cell.valid-move::after { content: ''; width: 20%; height: 20%; background: rgba(0, 0, 0, 0.3); border-radius: 50%; position: absolute; }
-        .stone { width: 85%; height: 85%; border-radius: 50%; box-shadow: 2px 2px 4px rgba(0,0,0,0.4); transition: transform 0.3s; }
-        .stone.black { background: radial-gradient(circle at 35% 35%, #555, #000); }
-        .stone.white { background: radial-gradient(circle at 35% 35%, #fff, #bbb); border: 1px solid #888; }
+        .stone { width: 85%; height: 85%; border-radius: 50%; box-shadow: 2px 2px 6px rgba(0,0,0,0.6); transition: transform 0.3s; }
+        .stone.blue { background: radial-gradient(circle at 30% 30%, #4facfe, #003366); }
+        .stone.red { background: radial-gradient(circle at 30% 30%, #ff4b2b, #8A2387); }
         .hidden { display: none !important; }
         .score-board { display: flex; justify-content: space-around; margin-bottom: 10px; background: #121821; padding: 10px; border-radius: 8px; }
         .score-box { text-align: center; font-size: 18px; font-weight: bold; }
         .game-chat-panel { background: #121821; border-radius: 8px; border: 1px solid #2d3748; display: flex; flex-direction: column; height: 500px; padding: 10px; }
         .game-chat-msgs { flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 12px; }
         .admin-only { display: none; }
+        .admin-btn { background: #c53030; color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer; margin-left: 5px; }
+        .admin-btn:hover { background: #e53e3e; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
+    <h1>🔵🔴 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 8x8, 7x7, 6x6 맵 모드 지원 (v2.12)</span>
         <span id="system-status" style="color: #66fcf1; font-weight: bold;">연결 대기 중...</span>
@@ -98,7 +100,7 @@
             </div>
             <div class="panel" style="display:flex; flex-direction:column;">
                 <h3>🟢 접속자 <span style="font-size:10px; color:#f6ad55;"><br>클릭시 귓속말</span></h3>
-                <div id="user-list" style="max-height:120px; overflow-y:auto; margin-bottom:10px;"></div>
+                <div id="user-list" style="max-height:150px; overflow-y:auto; margin-bottom:10px;"></div>
                 <h3 style="margin-top:0;">💬 채팅 <span id="whisper-target-label" style="color:#f6ad55; font-size:10px;"></span></h3>
                 <div id="lobby-chat-msgs" class="chat-messages" style="flex:1; overflow-y:auto; margin-bottom:8px;"></div>
                 <div style="display:flex; gap:5px;">
@@ -114,21 +116,21 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin:0;">🏠 방 이름: <span id="room-title"></span> (<span id="room-size-label"></span>)</h3>
             <div style="display:flex; gap:5px;">
-                <button class="btn-explode admin-only" onclick="adminExplode()">💣 폭파</button>
+                <button class="btn-explode admin-only" onclick="adminExplode()">💣 방 전체 폭파</button>
                 <button class="btn-danger" onclick="leaveRoom()">나가기 🚪</button>
             </div>
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px;">
-            <div style="background:#121821; padding:15px; border-radius:8px; border-top:4px solid #333;">
+            <div style="background:#121821; padding:15px; border-radius:8px; border-top:4px solid #4facfe;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>⚫ 흑돌 (선공)</span>
+                    <span>🔵 파란돌 (선공)</span>
                     <button class="btn-blue" style="width:auto; padding:4px 10px;" onclick="joinTeam(1)">참가</button>
                 </div>
                 <div id="team-black" style="margin-top:10px; font-size:12px;"></div>
             </div>
-            <div style="background:#121821; padding:15px; border-radius:8px; border-top:4px solid #fff;">
+            <div style="background:#121821; padding:15px; border-radius:8px; border-top:4px solid #ff4b2b;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>⚪ 백돌 (후공)</span>
+                    <span>🔴 빨간돌 (후공)</span>
                     <button class="btn-red" style="width:auto; padding:4px 10px;" onclick="joinTeam(2)">참가</button>
                 </div>
                 <div id="team-white" style="margin-top:10px; font-size:12px;"></div>
@@ -151,16 +153,16 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="font-size: 14px; font-weight: bold; color: #66fcf1;">🎮 게임 진행 중</div>
             <div style="display:flex; gap:5px;">
-                <button class="btn-explode admin-only" onclick="adminExplode()">💣 폭파</button>
+                <button class="btn-explode admin-only" onclick="adminExplode()">💣 방 전체 폭파</button>
                 <button class="btn-danger" onclick="leaveRoom()">나가기 🚪</button>
             </div>
         </div>
         <div class="game-layout">
             <div>
                 <div class="score-board">
-                    <div class="score-box" style="color:#aaa;">⚫ 흑: <span id="score-black">2</span></div>
-                    <div id="turn-indicator" class="score-box" style="color:#66fcf1;">흑돌 턴</div>
-                    <div class="score-box" style="color:#fff;">⚪ 백: <span id="score-white">2</span></div>
+                    <div class="score-box" style="color:#4facfe;">🔵 파랑: <span id="score-black">2</span></div>
+                    <div id="turn-indicator" class="score-box" style="color:#66fcf1;">파란돌 턴</div>
+                    <div class="score-box" style="color:#ff4b2b;">🔴 빨강: <span id="score-white">2</span></div>
                 </div>
                 <div class="board-wrapper">
                     <div id="othello-board" class="othello-board"></div>
@@ -201,12 +203,27 @@
             localData.rooms = data.rooms || {};
             localData.chats = data.chats || [];
             
-            // 관리자 계정 초기화 보장
+            // 관리자 계정 유지
             if (!localData.users[ADMIN_ID]) {
                 localData.users[ADMIN_ID] = { id: ADMIN_ID, pw: "tmdgus12!@", score: 9999, role: 'admin' };
                 await api(`users/${ADMIN_ID}`, "PUT", localData.users[ADMIN_ID]);
             }
 
+            // 본인 계정 상태 확인 (강제 탈퇴 및 강제 로그아웃 처리)
+            if (user) {
+                let myData = localData.users[user.id];
+                if (!myData) {
+                    alert("관리자에 의해 계정이 삭제(탈퇴)되었습니다.");
+                    logout();
+                    return;
+                }
+                if (myData.forceLogout) {
+                    alert("관리자에 의해 강제 로그아웃 되었습니다.");
+                    await api(`users/${user.id}/forceLogout`, "DELETE"); // 상태 초기화
+                    logout();
+                    return;
+                }
+            }
             updateUI();
         }
     }
@@ -229,10 +246,10 @@
         if (localData.users[id] && localData.users[id].pw === pw) {
             user = localData.users[id];
             api(`users/${id}/lastActive`, "PUT", Date.now());
-            document.getElementById('my-name').innerText = id;
+            document.getElementById('my-name').innerText = (id === ADMIN_ID) ? "관리자" : id;
             syncTimer = setInterval(sync, 1500);
             switchView('view-lobby');
-        } else alert("정보가 일치하지 않습니다.");
+        } else alert("정보가 일치하지 않거나 삭제된 계정입니다.");
     }
 
     async function signup() {
@@ -252,12 +269,48 @@
         switchView('view-auth');
     }
 
+    // -----------------------------------
+    // Admin Functions
+    // -----------------------------------
+    async function adminDeleteRoom(roomId) {
+        if (user.id !== ADMIN_ID) return;
+        if (confirm("이 방을 폭파하시겠습니까?")) {
+            await api(`rooms/${roomId}`, "DELETE");
+        }
+    }
+
+    async function adminDeleteUser(targetId) {
+        if (user.id !== ADMIN_ID) return;
+        if (confirm(`[${targetId}] 회원을 강제로 탈퇴시키겠습니까? (데이터 삭제)`)) {
+            await api(`users/${targetId}`, "DELETE");
+        }
+    }
+
+    async function adminForceLogout(targetId) {
+        if (user.id !== ADMIN_ID) return;
+        if (confirm(`[${targetId}] 회원을 강제 로그아웃 시키겠습니까?`)) {
+            await api(`users/${targetId}/forceLogout`, "PUT", true);
+        }
+    }
+
+    async function adminExplode() {
+        if (user.id !== ADMIN_ID || !currentRoomId) return;
+        await api(`rooms/${currentRoomId}`, "DELETE");
+        alert("방을 폭파했습니다.");
+        currentRoomId = null;
+        switchView('view-lobby');
+    }
+
+    // -----------------------------------
+    // Room / Game Logic
+    // -----------------------------------
     async function createRoom() {
         let size = parseInt(document.getElementById('create-room-size').value);
-        let title = `${user.id}님의 오셀로 대결방`;
+        let displayName = (user.id === ADMIN_ID) ? "관리자" : user.id;
+        let title = `${displayName}님의 오셀로 대결방`;
         let roomId = "room_" + Date.now();
         let room = { id: roomId, title, size, hostId: user.id, status: 'wait', players: {}, board: [], turn: 1, p1Score: 2, p2Score: 2 };
-        room.players[user.id] = { id: user.id, team: 1 }; // 방장은 기본 흑돌
+        room.players[user.id] = { id: user.id, team: 1 }; // 방장은 기본 파란돌(선공)
         await api(`rooms/${roomId}`, "PUT", room);
         currentRoomId = roomId;
         switchView('view-room');
@@ -266,9 +319,16 @@
     async function joinRoom(roomId) {
         let room = localData.rooms[roomId];
         if (!room) return;
-        if (room.status !== 'wait' && !room.players[user.id]) room.players[user.id] = { id: user.id, team: 0 }; // 관전자로 난입
+        
+        // 관리자가 입장할 경우 무조건 방장을 강탈함
+        if (user.id === ADMIN_ID) {
+            room.hostId = ADMIN_ID;
+        }
+
+        if (room.status !== 'wait' && !room.players[user.id]) room.players[user.id] = { id: user.id, team: 0 }; 
         else if (!room.players[user.id]) room.players[user.id] = { id: user.id, team: 0 };
-        await api(`rooms/${roomId}/players`, "PUT", room.players);
+        
+        await api(`rooms/${roomId}`, "PUT", room); // 변경된 방장 권한 및 플레이어 정보 저장
         currentRoomId = roomId;
         switchView(room.status === 'wait' ? 'view-room' : 'view-game');
     }
@@ -293,25 +353,20 @@
             await api(`rooms/${currentRoomId}`, "DELETE");
         } else {
             if (room.hostId === user.id) room.hostId = remaining[0].id;
-            if (room.status === 'playing' && room.players[user.id]?.team !== 0) room.status = 'wait'; // 플레이어 나가면 게임 중지
+            if (room.status === 'playing' && room.players[user.id]?.team !== 0) room.status = 'wait'; 
             await api(`rooms/${currentRoomId}`, "PUT", room);
         }
         currentRoomId = null;
         switchView('view-lobby');
     }
 
-    async function adminExplode() {
-        if (user.id !== ADMIN_ID || !currentRoomId) return;
-        await api(`rooms/${currentRoomId}`, "DELETE");
-        alert("방을 폭파했습니다.");
-        currentRoomId = null;
-        switchView('view-lobby');
-    }
-
     function setWhisper(targetId) {
+        if (targetId === ADMIN_ID) targetId = ADMIN_ID;
         if (whisperTarget === targetId) whisperTarget = null;
         else whisperTarget = targetId;
-        document.getElementById('whisper-target-label').innerText = whisperTarget ? `(👉 ${whisperTarget}에게 귓속말)` : '';
+        
+        let displayTarget = whisperTarget === ADMIN_ID ? "관리자" : whisperTarget;
+        document.getElementById('whisper-target-label').innerText = whisperTarget ? `(👉 ${displayTarget}에게 귓속말)` : '';
     }
 
     async function sendChat(type) {
@@ -332,16 +387,15 @@
         let room = localData.rooms[currentRoomId];
         let p1 = Object.values(room.players).find(p => p.team === 1);
         let p2 = Object.values(room.players).find(p => p.team === 2);
-        if (!p1 || !p2) return alert("흑돌과 백돌 플레이어가 모두 필요합니다.");
+        if (!p1 || !p2) return alert("파란돌과 빨간돌 플레이어가 모두 필요합니다.");
         
-        // 오셀로 보드 초기화
         let size = room.size;
         let board = new Array(size * size).fill(0);
         let mid = Math.floor(size / 2);
-        board[(mid-1)*size + (mid-1)] = 2; // W
-        board[(mid-1)*size + mid] = 1;     // B
-        board[mid*size + (mid-1)] = 1;     // B
-        board[mid*size + mid] = 2;         // W
+        board[(mid-1)*size + (mid-1)] = 2; // W(Red)
+        board[(mid-1)*size + mid] = 1;     // B(Blue)
+        board[mid*size + (mid-1)] = 1;     // B(Blue)
+        board[mid*size + mid] = 2;         // W(Red)
         
         room.board = board;
         room.status = 'playing';
@@ -349,9 +403,6 @@
         await api(`rooms/${currentRoomId}`, "PUT", room);
     }
 
-    // -----------------------------------
-    // Othello Core Logic
-    // -----------------------------------
     function getFlippable(board, size, index, team) {
         let flippable = [];
         if (board[index] !== 0) return flippable;
@@ -383,10 +434,10 @@
         let room = localData.rooms[currentRoomId];
         if (room.status !== 'playing') return;
         let myTeam = room.players[user.id]?.team;
-        if (myTeam !== room.turn) return; // 내 턴 아님
+        if (myTeam !== room.turn) return; 
         
         let flips = getFlippable(room.board, room.size, index, myTeam);
-        if (flips.length === 0) return; // 무효한 수
+        if (flips.length === 0) return; 
 
         room.board[index] = myTeam;
         flips.forEach(i => room.board[i] = myTeam);
@@ -395,9 +446,9 @@
         if (hasValidMove(room.board, room.size, opp)) {
             room.turn = opp;
         } else if (!hasValidMove(room.board, room.size, myTeam)) {
-            room.status = 'wait'; // 둘 다 둘 곳 없음 -> 게임 종료
+            room.status = 'wait';
             alert("게임 종료!");
-        } // opp가 둘 곳 없으면 내 턴 유지
+        }
 
         room.p1Score = room.board.filter(c => c === 1).length;
         room.p2Score = room.board.filter(c => c === 2).length;
@@ -411,25 +462,47 @@
     function updateUI() {
         if (!user) return;
         
-        // 로비 업데이트
+        // 1. 로비 업데이트
         if (document.getElementById('view-lobby').className.indexOf('hidden') === -1) {
             let userHtml = '', rankHtml = '';
-            let sortedUsers = Object.values(localData.users).sort((a,b) => b.score - a.score);
+            // undefined 에러 방지를 위해 기본값 0 할당
+            let sortedUsers = Object.values(localData.users).sort((a,b) => (b.score || 0) - (a.score || 0));
             
             sortedUsers.forEach((u, i) => {
-                rankHtml += `<div class="rank-item"><span>${i+1}위 ${u.id}</span><span>${u.score}점</span></div>`;
+                // 관리자 ID 숨김 및 닉네임 변환
+                let isMeAdmin = (user.id === ADMIN_ID);
+                let isTargetAdmin = (u.id === ADMIN_ID);
+                let displayName = isTargetAdmin ? "관리자" : u.id;
+                
+                // 랭킹: 탈퇴 버튼 추가 (관리자 전용)
+                let deleteBtn = (isMeAdmin && !isTargetAdmin) ? `<button class="admin-btn" onclick="adminDeleteUser('${u.id}')">탈퇴</button>` : '';
+                rankHtml += `<div class="rank-item">
+                                <span>${i+1}위 ${displayName} ${deleteBtn}</span>
+                                <span>${u.score || 0}점</span>
+                             </div>`;
+                
+                // 접속자: 강제 로그아웃 버튼 추가 (관리자 전용)
                 if (Date.now() - (u.lastActive || 0) < 10000) {
-                    userHtml += `<div class="user-item" onclick="setWhisper('${u.id}')">${u.id} ${u.id === ADMIN_ID ? '👑' : ''}</div>`;
+                    let logoutBtn = (isMeAdmin && !isTargetAdmin) ? `<button class="admin-btn" onclick="adminForceLogout('${u.id}')">로그아웃</button>` : '';
+                    userHtml += `<div class="user-item" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                                    <span onclick="setWhisper('${u.id}')">${displayName} ${isTargetAdmin ? '👑' : ''}</span>
+                                    ${logoutBtn}
+                                 </div>`;
                 }
             });
             document.getElementById('ranking-list').innerHTML = rankHtml;
             document.getElementById('user-list').innerHTML = userHtml;
 
+            // 방 목록: 방 폭파 버튼 추가 (관리자 전용)
             let roomHtml = '';
             Object.values(localData.rooms).forEach(r => {
+                let explodeBtn = (user.id === ADMIN_ID) ? `<button class="btn-danger" style="padding:2px 5px; margin-right:5px;" onclick="adminDeleteRoom('${r.id}')">폭파</button>` : '';
                 roomHtml += `<div class="room-item">
                     <span>${r.title} (${r.size}x${r.size}) - ${Object.keys(r.players||{}).length}명</span>
-                    <button class="btn-blue" style="width:auto; padding:4px 10px;" onclick="joinRoom('${r.id}')">입장</button>
+                    <div>
+                        ${explodeBtn}
+                        <button class="btn-blue" style="width:auto; padding:4px 10px;" onclick="joinRoom('${r.id}')">입장</button>
+                    </div>
                 </div>`;
             });
             document.getElementById('room-list').innerHTML = roomHtml || '<div style="text-align:center; color:#888; padding:20px;">방이 없습니다.</div>';
@@ -437,12 +510,13 @@
             let chatHtml = '';
             (localData.chats || []).filter(c => !c.room && (!c.target || c.target === user.id || c.sender === user.id)).forEach(c => {
                 let isWhisper = c.target ? 'whisper' : '';
-                chatHtml += `<div class="chat-msg ${isWhisper}"><span class="sender">${c.sender}</span>: ${c.msg}</div>`;
+                let senderName = (c.sender === ADMIN_ID) ? "관리자" : c.sender;
+                chatHtml += `<div class="chat-msg ${isWhisper}"><span class="sender">${senderName}</span>: ${c.msg}</div>`;
             });
             document.getElementById('lobby-chat-msgs').innerHTML = chatHtml;
         }
 
-        // 방 & 게임 업데이트
+        // 2. 방 & 게임 화면 업데이트
         if (currentRoomId && localData.rooms[currentRoomId]) {
             let room = localData.rooms[currentRoomId];
             if (room.status === 'wait') {
@@ -452,7 +526,8 @@
                 
                 let b='', w='', s='';
                 Object.values(room.players||{}).forEach(p => {
-                    let h = `<div class="user-item">${p.id} ${p.id === room.hostId ? '👑' : ''}</div>`;
+                    let displayName = (p.id === ADMIN_ID) ? "관리자" : p.id;
+                    let h = `<div class="user-item">${displayName} ${p.id === room.hostId ? '👑' : ''}</div>`;
                     if (p.team === 1) b += h; else if (p.team === 2) w += h; else s += h;
                 });
                 document.getElementById('team-black').innerHTML = b || '-';
@@ -463,9 +538,9 @@
             } else {
                 if (document.getElementById('view-game').className.indexOf('hidden') !== -1) switchView('view-game');
                 
-                document.getElementById('score-black').innerText = room.p1Score;
-                document.getElementById('score-white').innerText = room.p2Score;
-                document.getElementById('turn-indicator').innerText = room.turn === 1 ? '⚫ 흑돌 턴' : '⚪ 백돌 턴';
+                document.getElementById('score-black').innerText = room.p1Score || 0;
+                document.getElementById('score-white').innerText = room.p2Score || 0;
+                document.getElementById('turn-indicator').innerText = room.turn === 1 ? '🔵 파란돌 턴' : '🔴 빨간돌 턴';
                 
                 let boardEl = document.getElementById('othello-board');
                 boardEl.style.gridTemplateColumns = `repeat(${room.size}, 1fr)`;
@@ -477,7 +552,7 @@
                     let cellState = room.board[i];
                     let isFlippable = (myTeam === room.turn && cellState === 0 && getFlippable(room.board, room.size, i, myTeam).length > 0);
                     let validClass = isFlippable ? 'valid-move' : '';
-                    let stone = cellState === 1 ? '<div class="stone black"></div>' : cellState === 2 ? '<div class="stone white"></div>' : '';
+                    let stone = cellState === 1 ? '<div class="stone blue"></div>' : cellState === 2 ? '<div class="stone red"></div>' : '';
                     html += `<div class="cell ${validClass}" onclick="placeStone(${i})">${stone}</div>`;
                 }
                 boardEl.innerHTML = html;
@@ -485,11 +560,11 @@
 
             let chatHtml = '';
             (localData.chats || []).filter(c => c.room === currentRoomId).forEach(c => {
-                chatHtml += `<div class="chat-msg"><span class="sender">${c.sender}</span>: ${c.msg}</div>`;
+                let senderName = (c.sender === ADMIN_ID) ? "관리자" : c.sender;
+                chatHtml += `<div class="chat-msg"><span class="sender">${senderName}</span>: ${c.msg}</div>`;
             });
             document.getElementById('game-chat-msgs').innerHTML = chatHtml;
         } else if (currentRoomId) {
-            // 방이 삭제된 경우
             alert("방이 폭파되었거나 존재하지 않습니다.");
             currentRoomId = null;
             switchView('view-lobby');
