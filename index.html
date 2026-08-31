@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.11 - 관리자 방 폭파 및 게임 완벽 수정)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.12 - 오셀로 규칙 완화 및 완벽 수정)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -95,7 +95,7 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.11 (관리자 방 폭파/게임 완벽 수정)</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.12 (규칙 테스트 및 완벽 수정)</span>
     </div>
 
     <!-- [뷰 1] 로그인 / 회원가입 화면 -->
@@ -148,7 +148,7 @@
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.11 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.12 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -285,7 +285,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.11.html';
+        a.download = 'othello_v2.12.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -592,7 +592,6 @@
         }
     }
 
-    // 🛠️ [신규 추가] 로비 방 목록에서 관리자가 직접 방을 폭파하는 기능
     async function adminExplodeRoomFromLobby(rId) {
         if (!currentUser || currentUser.id !== ADMIN_ID) return;
         if (confirm(`[관리자 권한] '${rId}' 방을 강제로 폭파하시겠습니까?`)) {
@@ -660,7 +659,6 @@
             const playersCount = room.players ? Object.keys(room.players).length : 0;
             const statusText = room.gameState === 'playing' ? '🔴 대국 중' : '🟢 대기 중';
             
-            // 🛠️ [수정] 관리자 계정일 경우 방 목록에서 바로 폭파 버튼 표시
             let adminExplodeBtn = '';
             if (isAdmin) {
                 adminExplodeBtn = `<button class="btn-explode" style="width:auto; padding:5px 8px; font-size:10px; margin-right:4px;" onclick="adminExplodeRoomFromLobby('${rId}')">방폭파</button>`;
@@ -1001,7 +999,8 @@
 
         let flipped = getFlippedDiscs(room.board, r, c, discColor);
         if (flipped.length === 0) {
-            return alert("여기에 돌을 놓을 수 없습니다! 상대방 돌을 뒤집을 수 있는 위치에 놓아주세요.");
+            // 💡 [규칙 안내 팝업 메시지 정돈]
+            return alert("여기에 돌을 놓을 수 없습니다!\n오셀로 규칙: 상대방 돌을 가로/세로/대각선 방향으로 내 돌 사이에 두고 뒤집을 수 있는 빈자리에만 놓을 수 있습니다.");
         }
 
         room.board[r][c] = discColor;
