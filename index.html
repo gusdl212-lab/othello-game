@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.12 - 버그 완벽 해결)</title>
+    <title>⚫⚪ 멀티 오셀로 대전 플랫폼 (v2.13 - 버그 수정 및 관리자 기능 보완)</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
@@ -96,9 +96,10 @@
     <h1>⚫⚪ 멀티 오셀로 대전 플랫폼</h1>
     <div class="status-bar">
         <span>🌐 파이어베이스 실시간 영구 연동 모드 (오셀로 단독)</span>
-        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.12</span>
+        <span style="color: #66fcf1; font-weight: bold;">현재 버전: v2.13</span>
     </div>
 
+    <!-- [뷰 1] 로그인 / 회원가입 화면 -->
     <div id="view-auth" class="card auth-box hidden">
         <div id="form-login">
             <h3 style="text-align:center; color:#66fcf1;">🔐 로그인</h3>
@@ -141,13 +142,14 @@
         </div>
     </div>
 
+    <!-- [뷰 2] 로비 화면 -->
     <div id="view-lobby" class="card hidden">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div>
                 [오셀로 로비] 환영합니다, <strong id="my-profile-name"></strong>님 (<span id="my-profile-grade" style="color:#ffd700;">마스터</span>)
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.12 다운로드</button>
+                <button class="btn-blue" style="width:auto; padding:5px 10px; font-size:11px;" onclick="downloadLatestCode()">💾 v2.13 다운로드</button>
                 <button class="btn-danger" style="width:auto;" onclick="handleLogout()">로그아웃 🚪</button>
             </div>
         </div>
@@ -182,6 +184,7 @@
         </div>
     </div>
 
+    <!-- [뷰 3] 방 대기실 -->
     <div id="view-room" class="card hidden">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -230,6 +233,7 @@
         </div>
     </div>
 
+    <!-- [뷰 4] 게임 플레이 화면 -->
     <div id="view-game" class="card hidden">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="display:flex; align-items:center; gap:10px;">
@@ -275,7 +279,7 @@
     let heartbeatInterval = null;
     let hasPlayedConfetti = false;
     let whisperTarget = null; 
-    let isLocallyPlaying = false; // 동기화 덮어씌움 방지 플래그
+    let isLocallyPlaying = false; // 동기화 충돌 및 첫번째 리셋 방지 플래그
 
     function downloadLatestCode() {
         const htmlContent = document.documentElement.outerHTML;
@@ -283,7 +287,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'othello_v2.12.html';
+        a.download = 'othello_v2.13.html';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -449,7 +453,7 @@
         if (!currentRoomId) {
             renderLobbyView();
         } else {
-            // 로컬 착수 직후라면 서버 fetch로 인한 보드 깜빡임/리셋 방지
+            // 로컬 착수 직후이거나 플레이 중이면 서버 fetch로 인한 리셋 방지
             if (!isLocallyPlaying) {
                 renderRoomOrGameView();
             }
@@ -576,12 +580,29 @@
         switchView('view-auth');
     }
 
+    // 관리자 전용: 유저 탈퇴 기능
     async function adminDeleteUser(targetId) {
         if (!currentUser || currentUser.id !== ADMIN_ID) return;
         if (targetId === ADMIN_ID) return alert("관리자 계정은 탈퇴시킬 수 없습니다.");
         if (confirm(`[관리자 권한] '${targetId}' 유저를 탈퇴(삭제)시키겠습니까?`)) {
             await removeSpecificData('users/' + targetId);
             alert("해당 유저를 탈퇴 처리했습니다.");
+            fetchSystemData();
+        }
+    }
+
+    // 관리자 전용: 실시간 접속자 강제 로그아웃 기능 복구
+    async function adminForceLogout(targetId) {
+        if (!currentUser || currentUser.id !== ADMIN_ID) {
+            return alert("관리자만 사용할 수 있는 기능입니다.");
+        }
+        if (targetId === ADMIN_ID) {
+            return alert("관리자 계정은 강제 로그아웃할 수 없습니다.");
+        }
+        if (confirm(`[관리자 권한] '${targetId}' 사용자를 강제 로그아웃 시키겠습니까?`)) {
+            // 해당 유저의 lastActive를 아주 오래전으로 만들어 접속 종료 상태로 유도 및 계정 제어
+            await saveSpecificData('users/' + targetId + '/lastActive', 0);
+            alert(`${targetId}님이 강제 로그아웃 처리되었습니다.`);
             fetchSystemData();
         }
     }
@@ -647,7 +668,8 @@
             let isRoomHost = currentUser && room.host === currentUser.id;
 
             let explodeBtnHtml = '';
-            if (isRoomHost || isAdmin) {
+            // 루다 계정 방폭파 철저 차단 및 오직 방장 또는 andy212 관리자에게만 방 폭파 허용
+            if (isAdmin || isRoomHost) {
                 explodeBtnHtml = `<button class="btn-danger" style="padding:4px 8px; font-size:10px; background:#c53030;" onclick="event.stopPropagation(); explodeSpecificRoom('${rId}')">방폭파</button>`;
             }
 
@@ -679,16 +701,26 @@
         });
 
         countSpan.innerText = onlineUsers.length;
+        const isAdmin = currentUser && currentUser.id === ADMIN_ID;
         let html = '';
         onlineUsers.forEach(u => {
             let displayName = getDisplayName(u.id);
             let isMe = currentUser && u.id === currentUser.id;
             let tagColor = isMe ? '#66fcf1' : '#e0e6ed';
 
+            let logoutBtn = '';
+            // 관리자 전용 실시간 접속자 강제 로그아웃 버튼 추가 (관리자만 노출, 본인 제외)
+            if (isAdmin && !isMe && u.id !== ADMIN_ID) {
+                logoutBtn = `<button class="btn-admin-action" onclick="event.stopPropagation(); adminForceLogout('${u.id}')">로그아웃</button>`;
+            }
+
             html += `
                 <li class="user-item" style="cursor:pointer;" onclick="setWhisperTarget('${u.id}')">
                     <span style="color:${tagColor};">${displayName} ${isMe ? '(나)' : ''}</span>
-                    <span style="font-size:10px; color:#4eacc5;">귓속말</span>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        ${logoutBtn}
+                        <span style="font-size:10px; color:#4eacc5;">귓속말</span>
+                    </div>
                 </li>
             `;
         });
@@ -812,18 +844,22 @@
     function renderRoomView(room) {
         document.getElementById('display-room-id').innerText = currentRoomId;
 
-        const isHost = (room.host === currentUser.id) || (currentUser && currentUser.id === ADMIN_ID);
+        const isAdmin = (currentUser && currentUser.id === ADMIN_ID);
+        const isHost = (room.host === currentUser.id);
         const hostControls = document.getElementById('room-host-controls');
         const explodeBtn = document.getElementById('btn-explode-room');
 
         if (isHost) {
             hostControls.classList.remove('hidden');
-            explodeBtn.classList.remove('hidden');
-            document.getElementById('room-board-size').value = room.boardSize || 8;
         } else {
             hostControls.classList.add('hidden');
-            if (currentUser && currentUser.id === ADMIN_ID) explodeBtn.classList.remove('hidden');
-            else explodeBtn.classList.add('hidden');
+        }
+
+        // 방 폭파 버튼은 오직 관리자(andy212)이거나 해당 방 방장일 때만 노출 (루다 계정 등 일반 유저는 절대 불가)
+        if (isAdmin || isHost) {
+            explodeBtn.classList.remove('hidden');
+        } else {
+            explodeBtn.classList.add('hidden');
         }
 
         let blueList = '';
@@ -897,6 +933,14 @@
 
     async function explodeRoom() {
         if (!currentRoomId) return;
+        const isAdmin = (currentUser && currentUser.id === ADMIN_ID);
+        let room = globalData.rooms[currentRoomId];
+        let isHost = room && room.host === currentUser.id;
+
+        if (!isAdmin && !isHost) {
+            return alert("권한이 없습니다. 방 폭파는 방장 또는 관리자만 가능합니다.");
+        }
+
         if (confirm("방을 폭파하시겠습니까?")) {
             await removeSpecificData('rooms/' + currentRoomId);
             currentRoomId = null;
@@ -907,6 +951,14 @@
     }
 
     async function explodeSpecificRoom(rId) {
+        const isAdmin = (currentUser && currentUser.id === ADMIN_ID);
+        let room = globalData.rooms[rId];
+        let isHost = room && room.host === currentUser.id;
+
+        if (!isAdmin && !isHost) {
+            return alert("권한이 없습니다.");
+        }
+
         if (confirm(`'${rId}' 방을 폭파하시겠습니까?`)) {
             await removeSpecificData('rooms/' + rId);
             if (currentRoomId === rId) {
@@ -943,9 +995,11 @@
     }
 
     function renderGameView(room) {
-        const isHost = (room.host === currentUser.id) || (currentUser && currentUser.id === ADMIN_ID);
+        const isAdmin = (currentUser && currentUser.id === ADMIN_ID);
+        const isHost = (room.host === currentUser.id);
         const explodeGameBtn = document.getElementById('btn-explode-game');
-        if (isHost) {
+        
+        if (isAdmin || isHost) {
             explodeGameBtn.classList.remove('hidden');
         } else {
             explodeGameBtn.classList.add('hidden');
@@ -1083,14 +1137,13 @@
         let moveValid = validMoves.some(m => m.r === r && m.c === c);
         if (!moveValid) return;
 
-        // 로컬 착수 플래그 켜서 동기화 인터벌 충돌 원천 차단
+        // 로컬 착수 플래그 활성화하여 서버 fetch 동기화로 인한 초기화면 리셋/깜빡임 완벽 차단
         isLocallyPlaying = true;
 
         let player = room.turn;
         let opponent = player === 'blue' ? 'red' : 'blue';
         let directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
-        // Deep copy board to avoid reference mutation bugs
         let newBoard = board.map(row => [...row]);
         newBoard[r][c] = player;
 
@@ -1120,17 +1173,17 @@
         room.board = newBoard;
         room.turn = nextTurn;
 
-        // 로컬 데이터 즉시 반영 후 렌더링
+        // 즉시 로컬 화면 갱신
         renderGameView(room);
 
-        // 파이어베이스에 순차적으로 안정 저장
+        // 파이어베이스 저장
         await saveSpecificData('rooms/' + currentRoomId + '/board', room.board);
         await saveSpecificData('rooms/' + currentRoomId + '/turn', room.turn);
 
-        // 저장 완료 후 잠시 뒤 플래그 해제
+        // 안정화 대기 후 로컬 플레이 플래그 해제
         setTimeout(() => {
             isLocallyPlaying = false;
-        }, 500);
+        }, 800);
     }
 
     async function recordWinForTeam(room, winningTeam) {
@@ -1161,7 +1214,7 @@
     async function sendGameChat() {
         if (!currentRoomId) return;
         const input = document.getElementById('game-chat-input');
-        const text = input.value.trim();
+        const text = input.value.term ? input.value.trim() : input.value.trim();
         if (!text) return;
 
         let room = globalData.rooms[currentRoomId];
