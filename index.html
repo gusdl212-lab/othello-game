@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔵🔴 멀티 오셀로 대전 플랫폼 (v2.13)</title>
+    <title>🔵🔴 멀티 오셀로 대전 플랫폼 (v2.14)</title>
 
     <style>
         * {
@@ -191,6 +191,28 @@
             font-size: 12px;
             padding: 6px 8px;
             border-bottom: 1px solid #1f2833;
+        }
+
+        .game-menu-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #1f2833;
+            border: 1px solid #2d3748;
+            border-radius: 8px;
+            color: #e0e6ed;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        .game-menu-item:hover {
+            background: #2d3748;
+            border-color: #66fcf1;
+            color: #66fcf1;
+            transform: translateX(3px);
         }
 
         .user-item {
@@ -464,7 +486,7 @@
     <h1>🔵🔴 멀티 오셀로 대전 플랫폼</h1>
 
     <div class="status-bar">
-        <span>🌐 8x8, 7x7, 6x6 맵 모드 지원 (v2.13)</span>
+        <span>🌐 8x8, 7x7, 6x6 맵 모드 지원 (v2.14)</span>
         <span id="system-status" style="color: #66fcf1; font-weight: bold;">
             연결 대기 중...
         </span>
@@ -586,10 +608,10 @@
 
         <div class="lobby-grid">
 
-            <!-- 랭킹 -->
+            <!-- 좌측 패널 (관리자: 랭킹 / 일반사용자: 게임 메뉴) -->
             <div class="panel">
-                <h3>🏆 랭킹</h3>
-                <div id="ranking-list"></div>
+                <h3 id="left-panel-title">🏆 랭킹</h3>
+                <div id="left-panel-content"></div>
             </div>
 
             <!-- 방 목록 -->
@@ -2788,9 +2810,18 @@
             );
 
 
-            document
-                .getElementById('ranking-list')
-                .innerHTML = rankHtml;
+            if (user.id === ADMIN_ID) {
+                document.getElementById('left-panel-title').innerText = '🏆 랭킹';
+                document.getElementById('left-panel-content').innerHTML = rankHtml;
+            } else {
+                document.getElementById('left-panel-title').innerText = '🎮 게임 목록';
+                document.getElementById('left-panel-content').innerHTML = `
+                    <a href="https://omok-game.com" target="_blank" class="game-menu-item">⚪⚫ 오목 대전</a>
+                    <a href="https://chess-game.com" target="_blank" class="game-menu-item">♟️ 체스 대전</a>
+                    <a href="https://janggi-game.com" target="_blank" class="game-menu-item">🪨 장기 대전</a>
+                    <a href="https://boardgame-lounge.com" target="_blank" class="game-menu-item">🎲 보드게임 라운지</a>
+                `;
+            }
 
             document
                 .getElementById('user-list')
