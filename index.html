@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔵🔴 멀티 오셀로 대전 플랫폼 (v2.14)</title>
+    <title>🔵🔴 멀티 오셀로 대전 플랫폼 (v2.15)</title>
 
     <style>
         * {
@@ -134,7 +134,6 @@
             color: #fff;
         }
 
-        /* 일시정지 버튼 */
         .btn-pause {
             background: #d69e2e;
             color: #fff;
@@ -196,16 +195,17 @@
         .game-menu-item {
             display: flex;
             align-items: center;
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 8px;
             background: #1f2833;
             border: 1px solid #2d3748;
             border-radius: 8px;
             color: #e0e6ed;
-            text-decoration: none;
             font-size: 13px;
             font-weight: bold;
+            cursor: pointer;
             transition: all 0.2s ease;
+            user-select: none;
         }
 
         .game-menu-item:hover {
@@ -392,7 +392,6 @@
             margin-top: 10px;
         }
 
-        /* 일시정지 안내 */
         .pause-banner {
             background: rgba(214, 158, 46, 0.15);
             border: 1px solid #d69e2e;
@@ -405,7 +404,6 @@
             margin-bottom: 10px;
         }
 
-        /* 게임 종료 결과 */
         .game-result-overlay {
             position: absolute;
             inset: 0;
@@ -486,7 +484,7 @@
     <h1>🔵🔴 멀티 오셀로 대전 플랫폼</h1>
 
     <div class="status-bar">
-        <span>🌐 8x8, 7x7, 6x6 맵 모드 지원 (v2.14)</span>
+        <span>🌐 8x8, 7x7, 6x6 맵 모드 지원 (v2.15)</span>
         <span id="system-status" style="color: #66fcf1; font-weight: bold;">
             연결 대기 중...
         </span>
@@ -1067,6 +1065,14 @@
 
     let localTimerSec = 30;
     let clientTimerInterval = null;
+
+
+    /* =========================
+       새 탭 링크 호출 보장 함수
+    ========================= */
+    function openGameLink(url) {
+        window.open(url, '_blank');
+    }
 
 
     /* =========================
@@ -1986,7 +1992,6 @@
         room.turnStartTime =
             Date.now();
 
-        /* 일시정지 초기화 */
         room.paused = false;
         room.pausedBy = null;
         room.pausedAt = 0;
@@ -2214,7 +2219,6 @@
             return;
         }
 
-        /* 일시정지 중에는 착수 금지 */
         if (room.paused) {
             return;
         }
@@ -2272,7 +2276,6 @@
             )
         ) {
 
-            /* 게임 종료 */
             await finishGame(room);
 
             return;
@@ -2319,7 +2322,6 @@
             return;
         }
 
-        /* 일시정지 중이면 타임아웃 금지 */
         if (room.paused) {
             return;
         }
@@ -2446,10 +2448,8 @@
         }
 
 
-        /* 현재 일시정지 상태 */
         if (room.paused) {
 
-            /* 일시정지한 사람만 해제 가능 */
             if (room.pausedBy !== user.id) {
 
                 alert(
@@ -2465,12 +2465,6 @@
                 (room.pausedAt || Date.now());
 
 
-            /*
-             * 일시정지된 시간만큼
-             * 턴 시작 시간을 뒤로 밀어서
-             * 타이머가 일시정지 기간을
-             * 소모하지 않도록 함
-             */
             room.turnStartTime =
                 (room.turnStartTime || Date.now()) +
                 pausedDuration;
@@ -2490,8 +2484,6 @@
             return;
         }
 
-
-        /* 게임 일시정지 */
 
         room.paused = true;
 
@@ -2533,12 +2525,6 @@
                 return;
             }
 
-            /*
-             * 입력창에 글을 쓰는 중이면
-             * ESC로 일시정지하지 않음.
-             * 대신 입력창에서 ESC를 눌러도
-             * 게임이 멈추는 문제가 생기지 않도록 함.
-             */
             let tag =
                 document.activeElement?.tagName;
 
@@ -2659,11 +2645,6 @@
         }
 
 
-        /*
-         * 게임 결과는 남겨두되
-         * 대기실로 돌아오면 다시 시작 가능하도록
-         * 방 상태만 wait로 변경
-         */
         room.status = 'wait';
 
         room.paused = false;
@@ -2816,10 +2797,10 @@
             } else {
                 document.getElementById('left-panel-title').innerText = '🎮 게임 목록';
                 document.getElementById('left-panel-content').innerHTML = `
-                    <a href="https://omok-game.com" target="_blank" class="game-menu-item">⚪⚫ 오목 대전</a>
-                    <a href="https://chess-game.com" target="_blank" class="game-menu-item">♟️ 체스 대전</a>
-                    <a href="https://janggi-game.com" target="_blank" class="game-menu-item">🪨 장기 대전</a>
-                    <a href="https://boardgame-lounge.com" target="_blank" class="game-menu-item">🎲 보드게임 라운지</a>
+                    <div class="game-menu-item" onclick="openGameLink('https://omok-game.com')">⚪⚫ 오목 대전</div>
+                    <div class="game-menu-item" onclick="openGameLink('https://chess-game.com')">♟️ 체스 대전</div>
+                    <div class="game-menu-item" onclick="openGameLink('https://janggi-game.com')">🪨 장기 대전</div>
+                    <div class="game-menu-item" onclick="openGameLink('https://boardgame-lounge.com')">🎲 보드게임 라운지</div>
                 `;
             }
 
@@ -3199,10 +3180,6 @@
 
                     if (room.paused) {
 
-                        /*
-                         * 일시정지 시점의
-                         * 남은 시간을 고정
-                         */
                         let elapsed =
                             Math.floor(
                                 (
@@ -3241,9 +3218,6 @@
                         leftSec;
 
 
-                    /*
-                     * 타이머 인터벌
-                     */
                     if (!clientTimerInterval) {
 
                         clientTimerInterval =
@@ -3548,10 +3522,6 @@
         chatEl.innerHTML =
             chatHtml;
 
-        /*
-         * 항상 최신 채팅이 보이도록
-         * 아래쪽으로 이동
-         */
         chatEl.scrollTop =
             chatEl.scrollHeight;
     }
